@@ -13,7 +13,7 @@ config:
 	done
 
 .PHONY: up
-up:
+up: config
 	docker compose up -d
 
 .PHONY: start
@@ -28,16 +28,20 @@ stop:
 down:
 	docker compose down
 
+restart:
+	docker compose restart
+
 in:
 	docker compose exec clickhouse01 bash
 
 cli:
 	docker compose exec clickhouse01 clickhouse-client
 
-all: config up setup
-	@echo Now you have clickhouse cluster with 4 nodes!
-
 setup:
 	@echo "Running SQL file: $(SQL_FILE)..."
 	@cat $(SQL_FILE) | docker compose exec -T clickhouse01 clickhouse-client --multiquery
 
+read:
+	docker compose exec -T clickhouse01 clickhouse-client -q "SELECT * FROM company_db.events_distr"
+
+all: down up

@@ -1,0 +1,63 @@
+x-shared: &image
+  image: bitnami/clickhouse:24.9.1-debian-12-r2
+
+services:
+  clickhouse01:
+    <<: [*image]
+    container_name: clickhouse01
+    hostname: clickhouse01
+    environment:
+      ALLOW_EMPTY_PASSWORD: yes
+      CLICKHOUSE_MOUNTED_DIR: /bitnami/clickhouse
+    networks:
+      clickhouse-network:
+        ipv4_address: 172.23.32.110
+    ports:
+      - "127.0.0.1:9032:9000"
+    volumes:
+      - ${PWD}/clickhouse01:/bitnami/clickhouse/etc
+  clickhouse02:
+    <<: [*image]
+    container_name: clickhouse02
+    hostname: clickhouse02
+    environment:
+      ALLOW_EMPTY_PASSWORD: yes
+      CLICKHOUSE_MOUNTED_DIR: /bitnami/clickhouse
+    networks:
+      clickhouse-network:
+        ipv4_address: 172.23.32.120
+    volumes:
+      - ${PWD}/clickhouse02:/bitnami/clickhouse/etc
+  clickhouse03:
+    <<: [*image]
+    container_name: clickhouse03
+    hostname: clickhouse03
+    extra_hosts:
+      - "clickhouse03:172.23.32.130"
+    environment:
+      ALLOW_EMPTY_PASSWORD: yes
+      CLICKHOUSE_MOUNTED_DIR: /bitnami/clickhouse
+    networks:
+      clickhouse-network:
+        ipv4_address: 172.23.32.130
+    volumes:
+      - ${PWD}/clickhouse03:/bitnami/clickhouse/etc
+  clickhouse04:
+    <<: [*image]
+    container_name: clickhouse04
+    hostname: clickhouse04
+    environment:
+      ALLOW_EMPTY_PASSWORD: yes
+      CLICKHOUSE_MOUNTED_DIR: /bitnami/clickhouse
+    networks:
+      clickhouse-network:
+        ipv4_address: 172.23.32.140
+    volumes:
+      - ${PWD}/clickhouse04:/bitnami/clickhouse/etc
+
+networks:
+  clickhouse-network:
+    name: ch-network
+    ipam:
+      config:
+        - subnet: 172.23.32.0/24
