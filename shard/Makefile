@@ -1,7 +1,8 @@
 .DEFAULT_GOAL:=up
 .PHONY: config
 
-SQL_FILE=commands/setup.sql
+SQL_SETUP=commands/setup.sql
+SQL_INSERT=commands/insert.sql
 
 config:
 	@for i in $$(seq 1 4);do \
@@ -38,8 +39,12 @@ cli:
 	docker compose exec clickhouse01 clickhouse-client
 
 setup:
-	@echo "Running SQL file: $(SQL_FILE)..."
-	@cat $(SQL_FILE) | docker compose exec -T clickhouse01 clickhouse-client --multiquery
+	@echo "Running SQL file: $(SQL_SETUP)..."
+	@cat $(SQL_SETUP) | docker compose exec -T clickhouse01 clickhouse-client --multiquery
+
+insert:
+	@echo "Running SQL file: $(SQL_INSERT)..."
+	@cat $(SQL_INSERT) | docker compose exec -T clickhouse01 clickhouse-client --multiquery
 
 read:
 	docker compose exec -T clickhouse01 clickhouse-client -q "SELECT * FROM company_db.events_distr"
