@@ -136,7 +136,7 @@
             <host>clickhouse04</host>
             <port>9181</port>
         </node>
-         <node>
+        <node>
             <host>clickhouse05</host>
             <port>9181</port>
         </node>
