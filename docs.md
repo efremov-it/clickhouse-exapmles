@@ -212,29 +212,77 @@ Clickhouse работает так:
 ### 1. **Добавление нового узла:**
 Запустите новый ClickHouse сервер и убедитесь, что его конфигурация соответствует остальным узлам в кластере (например, у него установлен `keeper` для синхронизации данных).
 ### 2. **Обновление конфигурации кластера:**
-   - Добавьте новый шард в конфигурацию ClickHouse (`config.xml`) на всех узлах кластера, в секции `<remote_servers>`. Например:
+#### 2.1 Добавьте новый шард в конфигурацию ClickHouse (`config.xml`)
+
+На всех узлах кластера, в секции `<remote_servers>`. Например:
 
      ```xml
      <remote_servers>
-       <my_cluster>
+       <company_cluster>
          <shard>
-           <internal_replication>true</internal_replication>
-           <replica>
-             <host>shard1-node1</host>
-             <port>9000</port>
-           </replica>
-         </shard>
-         <!-- Новый шард -->
-         <shard>
-           <replica>
-             <host>shard5-node1</host>
-             <port>9000</port>
-           </replica>
-         </shard>
-       </my_cluster>
+              <replica>
+                  <host>clickhouse04</host>
+                  <port>9000</port>
+              </replica>
+          </shard>
+          <!-- Новый шард -->
+          <shard>
+              <replica>
+                  <host>clickhouse05</host>
+                  <port>9000</port>
+              </replica>
+          </shard>
+       </company_cluster>
      </remote_servers>
      ```
+#### 2.2 Добавьте новый шард в конфигурацию Raft (`config.xml`)
+
+    ```xml
+    <keeper_server>
+      <raft_configuration>
+            <server>
+                <id>04</id>
+                <hostname>clickhouse04</hostname>
+                <port>9234</port>
+            </server>
+            <!-- Новый шард -->
+            <server>
+                <id>05</id>
+                <hostname>clickhouse05</hostname>
+                <port>9234</port>
+            </server>
+      <raft_configuration>
+    <keeper_server>
+    ```
+#### 2.3 Добавьте новый шард в конфигурацию Zookeeper (`config.xml`)
+
+    ```xml
+    <zookeeper>
+        <node>
+            <host>clickhouse04</host>
+            <port>9181</port>
+        </node>
+         <node>
+            <host>clickhouse05</host>
+            <port>9181</port>
+        </node>
+    </zookeeper>
+    ```
+#### 2.4 По очереди, перезапустить все шарды, для применения нового конфига!
+
+После добавления нового шарда, будет лог
+`<Information> KeeperDispatcher: Server still not initialized, will not apply configuration until initialization finished`
+
+**debug**
+SET allow_unrestricted_reads_from_keeper = 1;
+
+SELECT * FROM system.zookeeper;
+
+
 ### 3. **Автоматизация создания таблиц**
+
+После поднятия, шард будет пуст. Ни базы данных, ни таблиц в нём не будет. Их нужно создать!
+
 Чтобы автоматизировать процесс создания таблиц на новом шарде, можно использовать следующие подходы:
 
 #### 3.1. **Скрипт на основе SQL-запросов**
@@ -247,17 +295,30 @@ Clickhouse работает так:
 ```python
 from clickhouse_driver import Client
 
+existing_shard_host = '172.23.32.110'
+new_shard_host = '172.23.32.150'
+db_name = 'company_db'
 # Подключение к существующему шару для получения списка таблиц
-client = Client(host='existing-shard-host', user='default', password='password')
+client = Client(host=existing_shard_host, user='default', password='')
+client.execute(f"USE {db_name}")
 tables = client.execute("SHOW TABLES")
 
-# Подключение к новому шарду
-new_shard_client = Client(host='new-shard-host', user='default', password='password')
+# Подключение к новому шару
+new_shard_client = Client(host=new_shard_host, user='default', password='')
+
+# Проверка существования базы данных на новом шарде, создание если не существует
+db_exists = new_shard_client.execute(f"EXISTS DATABASE {db_name}")
+if not db_exists[0][0]:
+    new_shard_client.execute(f"CREATE DATABASE {db_name}")
+
+# Переключение на новую базу на новом шарде
+new_shard_client.execute(f"USE {db_name}")
 
 # Создание таблиц на новом шарде
 for table in tables:
-    create_query = client.execute(f"SHOW CREATE TABLE {table[0]}")[0][0]
+    create_query = client.execute(f"SHOW CREATE TABLE {db_name}.{table[0]}")[0][0]
     new_shard_client.execute(create_query)
+print("Таблицы успешно скопированы на новый шард.")
 ```
 #### 3.2. **Провести создание руками**
 Команда `ON CLUSTER` в ClickHouse позволяет выполнять SQL-запросы на всех узлах кластера. Если вы добавили новый шард и хотите создать таблицы на нем, то нужно выполнить команду `CREATE TABLE` с параметром `ON CLUSTER`, и ClickHouse автоматически выполнит команду на всех шардах и репликах кластера, в том числе на новом.
