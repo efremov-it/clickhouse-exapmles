@@ -74,6 +74,15 @@
                     <send_timeout>1</send_timeout>
                 </replica>
             </shard>
+            <shard>
+                <replica>
+                    <host>clickhouse05</host>
+                    <port>9000</port>
+                    <connect_timeout>1</connect_timeout>
+                    <receive_timeout>1</receive_timeout>
+                    <send_timeout>1</send_timeout>
+                </replica>
+            </shard>
         </company_cluster>
     </remote_servers>
 
@@ -117,6 +126,11 @@
                 <hostname>clickhouse04</hostname>
                 <port>9234</port>
             </server>
+             <server>
+                <id>05</id>
+                <hostname>clickhouse05</hostname>
+                <port>9234</port>
+            </server>
         </raft_configuration> 
     </keeper_server>
 
@@ -135,6 +149,10 @@
         </node>
         <node>
             <host>clickhouse04</host>
+            <port>9181</port>
+        </node>
+        <node>
+            <host>clickhouse05</host>
             <port>9181</port>
         </node>
     </zookeeper>

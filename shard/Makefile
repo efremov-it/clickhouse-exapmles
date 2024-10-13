@@ -5,7 +5,7 @@ SQL_SETUP=commands/setup.sql
 SQL_INSERT=commands/insert.sql
 
 config:
-	@for i in $$(seq 1 4);do \
+	@for i in $$(seq 1 5);do \
 		rm -rf clickhouse0$$i; \
 		mkdir -p clickhouse0$$i; \
 		REPLICA=0$$i SHARD=0$$i CLICKHOUSE_SERVER_ID=$$i envsubst < configs/config.xml > clickhouse0$$i/config.xml; \
