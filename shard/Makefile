@@ -3,12 +3,22 @@
 
 SQL_SETUP=commands/setup.sql
 SQL_INSERT=commands/insert.sql
+VERSION=0
+COUNT=4
 
 config:
-	@for i in $$(seq 1 8);do \
-		rm -rf clickhouse0$$i; \
+	rm -rf clickhouse0*
+	@for i in $$(seq 1 "${COUNT}");do \
 		mkdir -p clickhouse0$$i; \
-		REPLICA=0$$i SHARD=0$$i CLICKHOUSE_SERVER_ID=$$i envsubst < configs/config.xml > clickhouse0$$i/config.xml; \
+		SHARDS=""; \
+		RAFT_CONFIG=""; \
+		ZOOKEEPER_NODES=""; \
+		for shard in $$(seq 1 "${COUNT}"); do \
+			SHARDS="$$SHARDS<shard><replica><host>clickhouse$$(printf %02d $$shard)</host><port>9000</port></replica></shard>\n\t\t\t"; \
+			RAFT_CONFIG="$$RAFT_CONFIG<server><id>${VERSION}$$shard</id><hostname>clickhouse$$(printf %02d $$shard)</hostname><port>9234</port></server>\n\t\t\t"; \
+			ZOOKEEPER_NODES="$$ZOOKEEPER_NODES<node><host>clickhouse$$(printf %02d $$shard)</host><port>9181</port></node>\n\t\t"; \
+		done; \
+		VERSION=${VERSION} REPLICA=${VERSION}$$i SHARDS="$$(echo "$$SHARDS")" RAFT_CONFIG="$$(echo "$$RAFT_CONFIG")" ZOOKEEPER_NODES="$$(echo "$$ZOOKEEPER_NODES")" CLICKHOUSE_SERVER_ID=$$i envsubst < configs/config.xml > clickhouse0$$i/config.xml; \
 		cp configs/users.xml clickhouse0$$i/users.xml; \
 		echo configs for clickhouse0$$i is ready; \
 	done

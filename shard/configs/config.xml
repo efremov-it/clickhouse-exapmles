@@ -15,7 +15,7 @@
     <listen_host>0.0.0.0</listen_host>
     <http_port>8123</http_port>
     <tcp_port>9000</tcp_port>
-    <!-- <interserver_http_host>clickhouse${REPLICA}</interserver_http_host> -->
+    <interserver_http_host>clickhouse${REPLICA}</interserver_http_host>
     <interserver_http_port>9009</interserver_http_port>
 
     <!-- <disable_internal_dns_cache>true</disable_internal_dns_cache> -->
@@ -38,42 +38,7 @@
 
     <remote_servers>
         <company_cluster>
-            <shard>
-                <replica>
-                    <host>clickhouse01</host>
-                    <port>9000</port>
-                </replica>
-            </shard>
-            <shard>
-                <replica>
-                    <host>clickhouse02</host>
-                    <port>9000</port>
-                </replica>
-            </shard>
-            <shard>
-                <replica>
-                    <host>clickhouse03</host>
-                    <port>9000</port>
-                </replica>
-            </shard>
-            <shard>
-                <replica>
-                    <host>clickhouse04</host>
-                    <port>9000</port>
-                </replica>
-            </shard>
-            <shard>
-                <replica>
-                    <host>clickhouse06</host>
-                    <port>9000</port>
-                </replica>
-            </shard>
-            <shard>
-                <replica>
-                    <host>clickhouse08</host>
-                    <port>9000</port>
-                </replica>
-            </shard>
+            ${SHARDS}
         </company_cluster>
     </remote_servers>
 
@@ -83,8 +48,10 @@
         <tcp_port>9181</tcp_port>
         <max_retries>10</max_retries>
         <retry_interval>1</retry_interval>
-        <log_storage_path>/bitnami/clickhouse/keeper/coordination/log</log_storage_path>
-        <snapshot_storage_path>/bitnami/clickhouse/keeper/coordination/snapshots</snapshot_storage_path>
+        <log_storage_path>/var/lib/clickhouse/coordination/keeper/log</log_storage_path>
+        <snapshot_storage_path>/var/lib/clickhouse/coordination/keeper/snapshots</snapshot_storage_path>
+        <!-- Обязательно, для автоматического обновления keeper кластера -->
+        <enable_reconfiguration>true</enable_reconfiguration>
         <!-- <storage_quorum>3</storage_quorum> # mKДолжно быть больше половины от количества нод -->
         <coordination_settings>
             <operation_timeout_ms>5000</operation_timeout_ms>
@@ -96,64 +63,21 @@
         <init_limit>10</init_limit>
         <sync_limit>5</sync_limit> -->
         <raft_configuration>
-            <server>
-                <id>01</id>
-                <hostname>clickhouse01</hostname>
+            ${RAFT_CONFIG}
+            <!-- <server>
+                <id>${VERSION}7</id>
+                <hostname>clickhouse07</hostname>
                 <port>9234</port>
-            </server>
-            <server>
-                <id>02</id>
-                <hostname>clickhouse02</hostname>
-                <port>9234</port>
-            </server>
-            <server>
-                <id>03</id>
-                <hostname>clickhouse03</hostname>
-                <port>9234</port>
-            </server>
-            <server>
-                <id>04</id>
-                <hostname>clickhouse04</hostname>
-                <port>9234</port>
-            </server>
-            <server>
-                <id>06</id>
-                <hostname>clickhouse06</hostname>
-                <port>9234</port>
-            </server>
-             <server>
-                <id>08</id>
-                <hostname>clickhouse08</hostname>
-                <port>9234</port>
-            </server>
+            </server> -->
         </raft_configuration> 
     </keeper_server>
 
     <zookeeper>
-        <node>
-            <host>clickhouse01</host>
+        ${ZOOKEEPER_NODES}
+        <!-- <node>
+            <host>clickhouse07</host>
             <port>9181</port>
-        </node>
-        <node>
-            <host>clickhouse02</host>
-            <port>9181</port>
-        </node>
-        <node>
-            <host>clickhouse03</host>
-            <port>9181</port>
-        </node>
-        <node>
-            <host>clickhouse04</host>
-            <port>9181</port>
-        </node>
-        <node>
-            <host>clickhouse06</host>
-            <port>9181</port>
-        </node>
-        <node>
-            <host>clickhouse08</host>
-            <port>9181</port>
-        </node>
+        </node> -->
     </zookeeper>
 
     <macros>

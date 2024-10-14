@@ -1,7 +1,7 @@
 from clickhouse_driver import Client
 
 existing_shard_host = '172.23.32.110'
-new_shard_host = '172.23.32.150'
+new_shard_host = '172.23.32.170'
 db_name = 'company_db'
 
 # Подключение к существующему шару для получения списка таблиц

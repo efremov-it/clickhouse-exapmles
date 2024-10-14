@@ -268,9 +268,52 @@ Clickhouse работает так:
         </node>
     </zookeeper>
     ```
-#### 2.4 По очереди, перезапустить все шарды, для применения нового конфига!
+**Проверка состаяния текущего кластера**
+```sql
+SELECT cluster,
+    shard_num,
+    host_name,
+    host_address
+FROM system.clusters;
+```
+Примерный вывод:
+```
+   ┌─cluster─────────┬─shard_num─┬─host_name────┬─host_address──┐
+1. │ company_cluster │         1 │ clickhouse01 │ 172.23.32.110 │
+2. │ company_cluster │         2 │ clickhouse02 │ 172.23.32.120 │
+3. │ company_cluster │         3 │ clickhouse03 │ 172.23.32.130 │
+4. │ company_cluster │         4 │ clickhouse04 │ 172.23.32.140 │
+   └─────────────────┴───────────┴──────────────┴───────────────┘
+```
 
-После добавления нового шарда, будет лог
+На данном этапе, видно, что кластер не применил настройки, для этого, нужно перезапустить ноды.
+
+#### 2.4 По очереди, перезапустить все шарды, для применения нового конфига!
+Снова выполняем команду
+
+```sql
+SELECT cluster,
+    shard_num,
+    host_name,
+    host_address
+FROM system.clusters;
+```
+Примерный вывод:
+```
+   ┌─cluster─────────┬─shard_num─┬─host_name────┬─host_address──┐
+1. │ company_cluster │         1 │ clickhouse01 │ 172.23.32.110 │
+2. │ company_cluster │         2 │ clickhouse02 │ 172.23.32.120 │
+3. │ company_cluster │         3 │ clickhouse03 │ 172.23.32.130 │
+4. │ company_cluster │         4 │ clickhouse04 │ 172.23.32.140 │
+5. │ company_cluster │         5 │ clickhouse05 │ 172.23.32.150 │
+   └─────────────────┴───────────┴──────────────┴───────────────┘
+```
+
+
+После добавления нового шарда, кластер будет работать как предполагается.
+Но т.к. мы используем keeper нам нужно новый шард добавить в кворум.
+На данный момент keeper не умеет это делать автоматически. И на новой ноде, будет спамить такого рода лог
+
 `<Information> KeeperDispatcher: Server still not initialized, will not apply configuration until initialization finished`
 
 Ключевая настройка для добавления шарда

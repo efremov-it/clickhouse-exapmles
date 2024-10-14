@@ -37,3 +37,12 @@ WHERE (`table` = 'events') AND (database = 'company_db')
 ```sql
 SELECT count(*) FROM company_db.events;
 ```
+**debug**
+SET allow_unrestricted_reads_from_keeper = 1;
+
+- проверка участников zookeeper
+
+SELECT * FROM system.zookeeper;
+
+- детально
+SET asterisk_include_materialized_columns=1;
