@@ -54,18 +54,42 @@ services:
         ipv4_address: 172.23.32.140
     volumes:
       - ${PWD}/clickhouse04:/bitnami/clickhouse/etc
-  clickhouse05:
+  clickhouse06:
     <<: [*image]
-    container_name: clickhouse05
-    hostname: clickhouse05
+    container_name: clickhouse06
+    hostname: clickhouse06
     environment:
       ALLOW_EMPTY_PASSWORD: yes
       CLICKHOUSE_MOUNTED_DIR: /bitnami/clickhouse
     networks:
       clickhouse-network:
-        ipv4_address: 172.23.32.150
+        ipv4_address: 172.23.32.160
     volumes:
-      - ${PWD}/clickhouse05:/bitnami/clickhouse/etc
+      - ${PWD}/clickhouse06:/bitnami/clickhouse/etc
+  clickhouse08:
+    <<: [*image]
+    container_name: clickhouse08
+    hostname: clickhouse08
+    environment:
+      ALLOW_EMPTY_PASSWORD: yes
+      CLICKHOUSE_MOUNTED_DIR: /bitnami/clickhouse
+    networks:
+      clickhouse-network:
+        ipv4_address: 172.23.32.180
+    volumes:
+      - ${PWD}/clickhouse08:/bitnami/clickhouse/etc
+  clickhouse07:
+    <<: [*image]
+    container_name: clickhouse07
+    hostname: clickhouse07
+    environment:
+      ALLOW_EMPTY_PASSWORD: yes
+      CLICKHOUSE_MOUNTED_DIR: /bitnami/clickhouse
+    networks:
+      clickhouse-network:
+        ipv4_address: 172.23.32.170
+    volumes:
+      - ${PWD}/clickhouse07:/bitnami/clickhouse/etc
 
 networks:
   clickhouse-network:

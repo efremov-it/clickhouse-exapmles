@@ -64,7 +64,13 @@
             </shard>
             <shard>
                 <replica>
-                    <host>clickhouse05</host>
+                    <host>clickhouse06</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+            <shard>
+                <replica>
+                    <host>clickhouse08</host>
                     <port>9000</port>
                 </replica>
             </shard>
@@ -77,19 +83,18 @@
         <tcp_port>9181</tcp_port>
         <max_retries>10</max_retries>
         <retry_interval>1</retry_interval>
-        <log_storage_path>/var/lib/clickhouse/coordination/log</log_storage_path>
-        <snapshot_storage_path>/var/lib/clickhouse/coordination/snapshots</snapshot_storage_path>
+        <log_storage_path>/bitnami/clickhouse/keeper/coordination/log</log_storage_path>
+        <snapshot_storage_path>/bitnami/clickhouse/keeper/coordination/snapshots</snapshot_storage_path>
         <!-- <storage_quorum>3</storage_quorum> # mKДолжно быть больше половины от количества нод -->
         <coordination_settings>
-            <operation_timeout_ms>1500</operation_timeout_ms>
+            <operation_timeout_ms>5000</operation_timeout_ms>
             <session_timeout_ms>30000</session_timeout_ms>
-            <raft_logs_level>trace</raft_logs_level>
+            <raft_logs_level>debug</raft_logs_level>
         </coordination_settings>
         <!-- <four_letter_word_allowed>1</four_letter_word_allowed>
         <tick_time>2000</tick_time>
         <init_limit>10</init_limit>
-        <sync_limit>5</sync_limit>
-        <operation_timeout_ms>1000</operation_timeout_ms> -->
+        <sync_limit>5</sync_limit> -->
         <raft_configuration>
             <server>
                 <id>01</id>
@@ -112,8 +117,13 @@
                 <port>9234</port>
             </server>
             <server>
-                <id>05</id>
-                <hostname>clickhouse05</hostname>
+                <id>06</id>
+                <hostname>clickhouse06</hostname>
+                <port>9234</port>
+            </server>
+             <server>
+                <id>08</id>
+                <hostname>clickhouse08</hostname>
                 <port>9234</port>
             </server>
         </raft_configuration> 
@@ -137,7 +147,11 @@
             <port>9181</port>
         </node>
         <node>
-            <host>clickhouse05</host>
+            <host>clickhouse06</host>
+            <port>9181</port>
+        </node>
+        <node>
+            <host>clickhouse08</host>
             <port>9181</port>
         </node>
     </zookeeper>

@@ -273,11 +273,61 @@ Clickhouse работает так:
 После добавления нового шарда, будет лог
 `<Information> KeeperDispatcher: Server still not initialized, will not apply configuration until initialization finished`
 
+Ключевая настройка для добавления шарда
+
+enable_reconfiguration
+
+https://clickhouse.com/docs/en/guides/sre/keeper/clickhouse-keeper#keeper-configuration-settings
+
 **debug**
 SET allow_unrestricted_reads_from_keeper = 1;
 
 SELECT * FROM system.zookeeper;
 
+#### 2.5 Добавление новой ноды в keeper quorum
+official documentation [LINK](https://clickhouse.com/docs/en/guides/sre/keeper/clickhouse-keeper#reconfiguration)
+
+Keeper требует, чтобы состояние кластера было консистентным, и поэтому все изменения, такие как добавление новых нод, необходимо выполнять вручную.
+Как вариант, можно написать скрипт автоматического добавления, но пока не вижу в этом смысла.
+
+1. Подключаемся с любой ноды в кластере к киперу
+
+docker exec -it -u root clickhouse06 clickhouse-keeper-client
+
+2. смотрим список всех доступных нод на данный момент
+
+```sh
+/ :) get "/keeper/config"
+server.11=clickhouse01:9234;participant;1
+server.12=clickhouse02:9234;participant;1
+server.13=clickhouse03:9234;participant;1
+server.14=clickhouse04:9234;participant;1
+server.15=clickhouse05:9234;participant;1
+```
+
+3. добавляем новую ноду в кворум
+
+```sh
+/ :) reconfig add "server.16=clickhouse06:9234;participant"
+server.16=clickhouse06:9234;participant;1
+server.11=clickhouse01:9234;participant;1
+server.12=clickhouse02:9234;participant;1
+server.13=clickhouse03:9234;participant;1
+server.14=clickhouse04:9234;participant;1
+server.15=clickhouse05:9234;participant;1
+```
+
+где
+- `server.16` ID нового шарда
+- `clickhouse06:9234` IP:port шарда
+- `participant` роль шарда
+
+Если настройка **enable_reconfiguration** будет отключена, мы *не сможем* внести изменения в кворум! И получим ошибку:
+
+```
+/ :) reconfig add "server.15=clickhouse05:9234;participent"
+Coordination error: Unimplemented
+```
 
 ### 3. **Автоматизация создания таблиц**
 
@@ -422,6 +472,16 @@ clickhouse-copier --config config.xml
 
 ### 4. **Перезапуск ClickHouse:**
 Перезапустите все узлы ClickHouse, чтобы изменения вступили в силу.
+
+### 5. **Удаление шарда из keeper quorum**
+
+```sh
+/ :) reconfig remove "15,16"
+server.11=clickhouse01:9234;participant;1
+server.12=clickhouse02:9234;participant;1
+server.13=clickhouse03:9234;participant;1
+server.14=clickhouse04:9234;participant;1
+```
 
 # **Поведение при нехватке места на одном из шардов**
 Если на одном из шардов заканчивается место, ClickHouse будет продолжать записывать данные на другие доступные шарды. Однако на шарде, на котором нет свободного места, любые операции записи будут завершаться ошибками. Поведение системы зависит от стратегии шардирования:

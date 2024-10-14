@@ -5,7 +5,7 @@ SQL_SETUP=commands/setup.sql
 SQL_INSERT=commands/insert.sql
 
 config:
-	@for i in $$(seq 1 5);do \
+	@for i in $$(seq 1 8);do \
 		rm -rf clickhouse0$$i; \
 		mkdir -p clickhouse0$$i; \
 		REPLICA=0$$i SHARD=0$$i CLICKHOUSE_SERVER_ID=$$i envsubst < configs/config.xml > clickhouse0$$i/config.xml; \
@@ -37,6 +37,9 @@ in:
 
 cli:
 	docker compose exec clickhouse01 clickhouse-client
+
+copy:
+	python3 commands/copy-meta.py
 
 setup:
 	@echo "Running SQL file: $(SQL_SETUP)..."
