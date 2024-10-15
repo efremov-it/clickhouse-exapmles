@@ -2,7 +2,7 @@
 <company>
     <profiles>
         <default>
-            <!-- Позволяет продолжать выполнять SQL команды, если одн из шардов не доступен -->
+            <!-- Позволяет продолжать выполнять SQL команды, если одн из шардов не доступен https://clickhouse.com/docs/ru/operations/settings/settings#distributed-product-mode -->
             <!-- <distributed_product_mode>allow</distributed_product_mode> -->
             <send_timeout>5</send_timeout> <!-- 5 секунд на отправку. Для тежелых запросов лучше не менять -->
             <connect_timeout>2</connect_timeout> <!-- 2 секунды на прием -->
