@@ -34,48 +34,12 @@
     <timezone>Europe/Moscow</timezone>
     <mlock_executable>false</mlock_executable>
 
-    <keeper_server>
-        <!-- Уникальный идентификатор для каждой ноды -->
-        <server_id>${REPLICA}</server_id> <!-- Увеличивать на каждой ноде (1, 2, 3, 4) -->
-        <tcp_port>9181</tcp_port>
-        <max_retries>10</max_retries>
-        <retry_interval>1</retry_interval>
-        <log_storage_path>/var/lib/clickhouse/coordination/log</log_storage_path>
-        <snapshot_storage_path>/var/lib/clickhouse/coordination/snapshots</snapshot_storage_path>
-        <!-- <storage_quorum>3</storage_quorum> # mKДолжно быть больше половины от количества нод -->
-        <coordination_settings>
-            <operation_timeout_ms>10000</operation_timeout_ms>
-            <session_timeout_ms>30000</session_timeout_ms>
-            <raft_logs_level>trace</raft_logs_level>
-        </coordination_settings>
-        <!-- <four_letter_word_allowed>1</four_letter_word_allowed>
-        <tick_time>2000</tick_time>
-        <init_limit>10</init_limit>
-        <sync_limit>5</sync_limit>
-        <operation_timeout_ms>10000</operation_timeout_ms> -->
-        <raft_configuration>
-            <server>
-                <id>01</id>
-                <hostname>clickhouse01</hostname>
-                <port>9234</port>
-            </server>
-            <server>
-                <id>02</id>
-                <hostname>clickhouse02</hostname>
-                <port>9234</port>
-            </server>
-            <server>
-                <id>03</id>
-                <hostname>clickhouse03</hostname>
-                <port>9234</port>
-            </server>
-            <server>
-                <id>04</id>
-                <hostname>clickhouse04</hostname>
-                <port>9234</port>
-            </server>
-        </raft_configuration> 
-    </keeper_server>
+    <merge_tree>
+        <number_of_free_entries_in_pool_to_lower_max_size_of_merge>32</number_of_free_entries_in_pool_to_lower_max_size_of_merge>
+        <max_replicated_merges_in_queue>36</max_replicated_merges_in_queue>
+        <max_bytes_to_merge_at_max_space_in_pool>161061273600</max_bytes_to_merge_at_max_space_in_pool>
+        <min_merge_bytes_to_use_direct_io>10737418240</min_merge_bytes_to_use_direct_io> <!-- 0 to disable -->
+    </merge_tree>
 
     <remote_servers>
         <company_cluster>
@@ -104,21 +68,19 @@
         </company_cluster>
     </remote_servers>
 
+    <users_config>users.xml</users_config>
+
     <zookeeper>
         <node>
-            <host>clickhouse01</host>
+            <host>keeper1</host>
             <port>9181</port>
         </node>
         <node>
-            <host>clickhouse02</host>
+            <host>keeper2</host>
             <port>9181</port>
         </node>
         <node>
-            <host>clickhouse03</host>
-            <port>9181</port>
-        </node>
-        <node>
-            <host>clickhouse04</host>
+            <host>keeper3</host>
             <port>9181</port>
         </node>
     </zookeeper>

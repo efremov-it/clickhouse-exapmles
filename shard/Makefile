@@ -4,7 +4,7 @@
 SQL_SETUP=commands/setup.sql
 SQL_INSERT=commands/insert.sql
 VERSION=0
-COUNT=4
+COUNT=3
 
 config:
 	rm -rf clickhouse0*

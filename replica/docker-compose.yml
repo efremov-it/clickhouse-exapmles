@@ -11,7 +11,7 @@ services:
       CLICKHOUSE_MOUNTED_DIR: /bitnami/clickhouse
     networks:
       clickhouse-network:
-        ipv4_address: 172.23.32.110
+        ipv4_address: 172.23.23.110
     volumes:
       - ${PWD}/clickhouse01:/bitnami/clickhouse/etc
   clickhouse02:
@@ -23,7 +23,7 @@ services:
       CLICKHOUSE_MOUNTED_DIR: /bitnami/clickhouse
     networks:
       clickhouse-network:
-        ipv4_address: 172.23.32.120
+        ipv4_address: 172.23.23.120
     volumes:
       - ${PWD}/clickhouse02:/bitnami/clickhouse/etc
   clickhouse03:
@@ -31,55 +31,57 @@ services:
     container_name: clickhouse03
     hostname: clickhouse03
     extra_hosts:
-      - "clickhouse03:172.23.32.130"
+      - "clickhouse03:172.23.23.130"
     environment:
       ALLOW_EMPTY_PASSWORD: yes
       CLICKHOUSE_MOUNTED_DIR: /bitnami/clickhouse
     networks:
       clickhouse-network:
-        ipv4_address: 172.23.32.130
+        ipv4_address: 172.23.23.130
     volumes:
       - ${PWD}/clickhouse03:/bitnami/clickhouse/etc
   clickhouse04:
     <<: [*image]
     container_name: clickhouse04
     hostname: clickhouse04
+    working_dir: /tmp
+    environment:
+      ALLOW_EMPTY_PASSWORD: yes
+      CLICKHOUSE_MOUNTED_DIR: /bitnami/clickhouse
+      HOME: /tmp
+    networks:
+      clickhouse-network:
+        ipv4_address: 172.23.23.140
+    volumes:
+      - ${PWD}/clickhouse04:/bitnami/clickhouse/etc
+  clickhouse05:
+    <<: [*image]
+    container_name: clickhouse05
+    hostname: clickhouse05
     environment:
       ALLOW_EMPTY_PASSWORD: yes
       CLICKHOUSE_MOUNTED_DIR: /bitnami/clickhouse
     networks:
       clickhouse-network:
-        ipv4_address: 172.23.32.140
+        ipv4_address: 172.23.23.150
     volumes:
-      - ${PWD}/clickhouse04:/bitnami/clickhouse/etc
-  # clickhouse05:
-  #   <<: [*image]
-  #   container_name: clickhouse05
-  #   hostname: clickhouse05
-  #   environment:
-  #     Agit config pull.rebase falseLLOW_EMPTY_PASSWORD: yes
-  #     CLICKHOUSE_MOUNTED_DIR: /bitnami/clickhouse
-  #   networks:
-  #     clickhouse-network:
-  #       ipv4_address: 172.23.32.150
-  #   volumes:
-  #     - ${PWD}/clickhouse05:/bitnami/clickhouse/etc
-  # clickhouse06:
-  #   <<: [*image]
-  #   container_name: clickhouse06
-  #   hostname: clickhouse06
-  #   environment:
-  #     ALLOW_EMPTY_PASSWORD: yes
-  #     CLICKHOUSE_MOUNTED_DIR: /bitnami/clickhouse
-  #   networks:
-  #     clickhouse-network:
-  #       ipv4_address: 172.23.32.160
-  #   volumes:
-  #     - ${PWD}/clickhouse06:/bitnami/clickhouse/etc
+      - ${PWD}/clickhouse05:/bitnami/clickhouse/etc
+  clickhouse06:
+    <<: [*image]
+    container_name: clickhouse06
+    hostname: clickhouse06
+    environment:
+      ALLOW_EMPTY_PASSWORD: yes
+      CLICKHOUSE_MOUNTED_DIR: /bitnami/clickhouse
+    networks:
+      clickhouse-network:
+        ipv4_address: 172.23.23.160
+    volumes:
+      - ${PWD}/clickhouse06:/bitnami/clickhouse/etc
 
 networks:
   clickhouse-network:
     name: ch-network
     ipam:
       config:
-        - subnet: 172.23.32.0/24
+        - subnet: 172.23.23.0/24

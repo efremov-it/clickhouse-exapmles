@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<company>
+    <zookeeper>
+        <node>
+            <host>clickhouse01</host>
+            <port>9181</port>
+        </node>
+        <node>
+            <host>clickhouse02</host>
+            <port>9181</port>
+        </node>
+        <node>
+            <host>clickhouse03</host>
+            <port>9181</port>
+        </node>
+        <node>
+            <host>clickhouse04</host>
+            <port>9181</port>
+        </node>
+        <node>
+            <host>clickhouse05</host>
+            <port>9181</port>
+        </node>
+        <node>
+            <host>clickhouse06</host>
+            <port>9181</port>
+        </node>
+    </zookeeper>
+</company>
