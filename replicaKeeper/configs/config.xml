@@ -34,12 +34,12 @@
     <timezone>Europe/Moscow</timezone>
     <mlock_executable>false</mlock_executable>
 
-    <merge_tree>
+    <!-- <merge_tree>
         <number_of_free_entries_in_pool_to_lower_max_size_of_merge>32</number_of_free_entries_in_pool_to_lower_max_size_of_merge>
         <max_replicated_merges_in_queue>36</max_replicated_merges_in_queue>
         <max_bytes_to_merge_at_max_space_in_pool>161061273600</max_bytes_to_merge_at_max_space_in_pool>
-        <min_merge_bytes_to_use_direct_io>10737418240</min_merge_bytes_to_use_direct_io> <!-- 0 to disable -->
-    </merge_tree>
+        <min_merge_bytes_to_use_direct_io>10737418240</min_merge_bytes_to_use_direct_io>
+    </merge_tree> -->
 
     <remote_servers>
         <company_cluster>
