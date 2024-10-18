@@ -1,0 +1,21 @@
+services:
+  grafana:
+    image: grafana/grafana
+    container_name: clickhouse-grafana
+    networks:
+      - clickhouse-network
+    ports:
+      - "3000:3000"
+    volumes:
+      - type: bind
+        source: ./data/
+        target: /var/lib/grafana
+    environment:
+      - GF_INSTALL_PLUGINS=grafana-clickhouse-datasource
+
+networks:
+  clickhouse-network:
+    name: ch-network
+    ipam:
+      config:
+        - subnet: 172.23.0.0/24

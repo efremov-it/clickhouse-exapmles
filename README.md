@@ -38,6 +38,9 @@ WHERE (`table` = 'events') AND (database = 'company_db')
 SELECT count(*) FROM company_db.events;
 ```
 **debug**
+
+SYSTEM SYNC REPLICA company_db.events;
+
 SET allow_unrestricted_reads_from_keeper = 1;
 
 - проверка участников zookeeper
