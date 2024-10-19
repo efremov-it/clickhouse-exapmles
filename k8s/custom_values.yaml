@@ -1,0 +1,238 @@
+image:
+  registry: harbor.rvision.pro
+  repository: sec/clickhouse
+  tag: 23.2.6.34-distroless-20240529
+
+command: []
+
+keeper:
+  enabled: true
+
+zookeeper:
+  enabled: false
+
+extraVolumes:
+    - name: tz
+      hostPath:
+        path: /usr/share/zoneinfo/UTC
+
+    - name: shared-config
+      emptyDir: { }
+
+extraVolumeMounts:
+  - name: tz
+    mountPath: /etc/localtime
+    readOnly: true
+
+  - name: shared-config
+    mountPath: /etc/clickhouse-server/config.d/00_default_overrides.xml
+    subPath: 00_default_overrides.xml
+
+initContainers:
+  - name: edit-clickhouse-config
+    image: harbor.rvision.pro/sec/clickhouse:23.2.6.34-init-20240529
+    volumeMounts:
+      - name: shared-config
+        mountPath: /opt/clickhouse/shared/
+      - name: config
+        mountPath: /opt/clickhouse/default/
+
+defaultConfigurationOverrides: |
+  <clickhouse>
+    <interserver_listen_host>0.0.0.0</interserver_listen_host>
+    <profiles>
+      <default>
+        <max_execution_time>{{ $.Values.profileSettings.maxExecutionTime }}</max_execution_time>
+        <queue_max_wait_ms>{{ $.Values.profileSettings.queueMaxWaitMs }}</queue_max_wait_ms>
+      </default>
+    </profiles>
+    <users>
+      <root>
+        <access_management>1</access_management>
+      </root>
+    </users>
+    <storage_configuration> <!-- В этом разделе задаются настройки хранилищ. -->
+        <disks> <!-- В этом разделе задаются диски, используемые для хранения данных. -->
+            <hot_disk_1> <!-- Пользовательское название диска. -->
+                <path>/bitnami/clickhouse/hot-1/</path> <!-- Директория хранения данных. -->
+            </hot_disk_1>
+            <cold_disk_1>
+                <path>/bitnami/clickhouse/cold-1/</path>
+            </cold_disk_1>
+        </disks>
+        <policies> <!-- В этом разделе задаются политики хранения, задаваемые при создании таблицы. -->
+            <siem_storage_policy> <!-- Название политики. -->
+                <volumes> <!-- В этом разделе задаются тома. Приоритет записи определяется порядком указания томов. -->
+                    <hot_volume> <!-- Пользовательское название тома. -->
+                        <disk>hot_disk_1</disk> <!-- Диск из раздела disks. -->
+                    </hot_volume>
+                    <cold_volume>
+                        <disk>cold_disk_1</disk> <!-- В одном томе можно указывать несколько дисков. Данные будут записываться на них по очереди. -->
+                    </cold_volume>
+                </volumes>
+            </siem_storage_policy>
+        </policies>
+    </storage_configuration>
+
+    <!-- Enable GRPC interaction -->
+    <grpc_port>9100</grpc_port>
+
+    <!-- Macros -->
+    <macros>
+      <shard from_env="CLICKHOUSE_SHARD_ID"></shard>
+      <replica from_env="CLICKHOUSE_REPLICA_ID"></replica>
+      <layer>{{ include "common.names.fullname" . }}</layer>
+      <!-- Cluster name from remote_servers section -->
+      <cluster>{{ $.Values.clusterSettings.cluster }}</cluster>
+    </macros>
+    <background_buffer_flush_schedule_pool_size>{{ $.Values.serverSettings.backgroundBufferFlushSchedulePoolSize }}</background_buffer_flush_schedule_pool_size>
+    <background_common_pool_size>{{ $.Values.serverSettings.backgroundCommonPoolSize }}</background_common_pool_size>
+    <background_distributed_schedule_pool_size>{{ $.Values.serverSettings.backgroundDistributedSchedulePoolSize }}</background_distributed_schedule_pool_size>
+    <background_fetches_pool_size>{{ $.Values.serverSettings.backgroundFetchesPoolSize }}</background_fetches_pool_size>
+    <background_message_broker_schedule_pool_size>{{ $.Values.serverSettings.backgroundMessageBrokerSchedulePoolSize }}</background_message_broker_schedule_pool_size>
+    <background_move_pool_size>{{ $.Values.serverSettings.backgroundMovePoolSize }}</background_move_pool_size>
+    <background_pool_size>{{ $.Values.serverSettings.backgroundPoolSize }}</background_pool_size>
+    <background_merges_mutations_concurrency_ratio>{{ $.Values.serverSettings.backgroundMergesMutationConcurrencyRatio }}</background_merges_mutations_concurrency_ratio>
+    <background_schedule_pool_size>{{ $.Values.serverSettings.backgroundSchedulePoolSize }}</background_schedule_pool_size>
+    <mark_cache_size>{{ $.Values.serverSettings.markCacheSize }}</mark_cache_size>
+    <max_concurrent_queries>{{ $.Values.serverSettings.maxConcurrentQueries }}</max_concurrent_queries>
+    <merge_tree>
+        <max_bytes_to_merge_at_max_space_in_pool>{{ $.Values.serverSettings.mergeTree.maxBytesToMergeAtMaxSpaceInPool }}</max_bytes_to_merge_at_max_space_in_pool>
+        <merge_max_block_size>{{ $.Values.serverSettings.mergeTree.mergeMaxBlockSize }}</merge_max_block_size>
+        <number_of_free_entries_in_pool_to_lower_max_size_of_merge>{{ $.Values.serverSettings.mergeTree.numberOfFreeEntriesInPoolToLowerMaxSizeOfMerge }}</number_of_free_entries_in_pool_to_lower_max_size_of_merge>
+    </merge_tree>
+    <!-- Log Level -->
+    <logger>
+      <level>{{ .Values.logLevel }}</level>
+    </logger>
+    {{- if or (ne (int .Values.shards) 1) (ne (int .Values.replicaCount) 1)}}
+    <!-- Cluster configuration - Any update of the shards and replicas requires helm upgrade -->
+    <database_atomic_delay_before_drop_table_sec>10</database_atomic_delay_before_drop_table_sec>
+    <remote_servers>
+      <{{ $.Values.clusterSettings.cluster }}>
+        {{- $shards := $.Values.shards | int }}
+        {{- range $shard, $e := until $shards }}
+        <shard>
+            {{- $replicas := $.Values.replicaCount | int }}
+            {{- range $i, $_e := until $replicas }}
+            <replica>
+                <host>{{ printf "%s-shard%d-%d.%s.%s.svc.%s" (include "common.names.fullname" $ ) $shard $i (include "clickhouse.headlessServiceName" $) (include "common.names.namespace" $) $.Values.clusterDomain }}</host>
+                <port>{{ $.Values.service.ports.tcp }}</port>
+                <user>{{ $.Values.clusterSettings.user }}</user>
+                <password>{{ $.Values.clusterSettings.password }}</password>
+            </replica>
+            {{- end }}
+        </shard>
+        {{- end }}
+      </{{ $.Values.clusterSettings.cluster }}>
+    </remote_servers>
+    {{- end }}
+    {{- if .Values.keeper.enabled }}
+    <!-- keeper configuration -->
+    <keeper_server>
+      {{/*ClickHouse keeper configuration using the helm chart */}}
+      <tcp_port>{{ $.Values.containerPorts.keeper }}</tcp_port>
+      {{- if .Values.tls.enabled }}
+      <tcp_port_secure>{{ $.Values.containerPorts.keeperSecure }}</tcp_port_secure>
+      {{- end }}
+      <server_id>SERVER_ID_PLACEHOLDER</server_id>
+      <log_storage_path>/bitnami/clickhouse/keeper/coordination/log</log_storage_path>
+      <snapshot_storage_path>/bitnami/clickhouse/keeper/coordination/snapshots</snapshot_storage_path>
+
+      <coordination_settings>
+          <operation_timeout_ms>10000</operation_timeout_ms>
+          <session_timeout_ms>30000</session_timeout_ms>
+          <raft_logs_level>trace</raft_logs_level>
+      </coordination_settings>
+
+      <raft_configuration>
+      {{- $replicas := $.Values.replicaCount | int }}
+      {{- $shards := $.Values.shards | int }}
+      {{- $servers := mul $replicas $shards }}
+      {{- range $j := until ($servers | int) }}
+      <server>
+        <id>{{ $j | int }}</id>
+        <hostname from_env="{{ printf "KEEPER_NODE_%d" $j }}"></hostname>
+        <port>{{ $.Values.service.ports.keeperInter }}</port>
+      </server>
+      {{- end }}
+      </raft_configuration>
+    </keeper_server>
+    {{- end }}
+    {{- if or .Values.keeper.enabled .Values.zookeeper.enabled .Values.externalZookeeper.servers }}
+    <!-- Zookeeper configuration -->
+    <zookeeper>
+      {{- if or .Values.keeper.enabled }}
+      {{- $replicas := $.Values.replicaCount | int }}
+      {{- $shards := $.Values.shards | int }}
+      {{- $servers := mul $replicas $shards }}
+      {{- range $j := until ($servers | int) }}
+      <node>
+        <host from_env="{{ printf "KEEPER_NODE_%d" $j }}"></host>
+        <port>{{ $.Values.service.ports.keeper }}</port>
+      </node>
+      {{- end }}
+      {{- else if .Values.zookeeper.enabled }}
+      {{/* Zookeeper configuration using the helm chart */}}
+      {{- $nodes := .Values.zookeeper.replicaCount | int }}
+      {{- range $node, $e := until $nodes }}
+      <node>
+        <host from_env="{{ printf "KEEPER_NODE_%d" $node }}"></host>
+        <port>{{ $.Values.zookeeper.service.ports.client }}</port>
+      </node>
+      {{- end }}
+      {{- else if .Values.externalZookeeper.servers }}
+      {{/* Zookeeper configuration using an external instance */}}
+      {{- range $node :=.Values.externalZookeeper.servers }}
+      <node>
+        <host>{{ $node }}</host>
+        <port>{{ $.Values.externalZookeeper.port }}</port>
+      </node>
+      {{- end }}
+      {{- end }}
+    </zookeeper>
+    {{- end }}
+    {{- if .Values.tls.enabled }}
+    <!-- TLS configuration -->
+    <tcp_port_secure from_env="CLICKHOUSE_TCP_SECURE_PORT"></tcp_port_secure>
+    <https_port from_env="CLICKHOUSE_HTTPS_PORT"></https_port>
+    <openSSL>
+        <server>
+            {{- $certFileName := default "tls.crt" .Values.tls.certFilename }}
+            {{- $keyFileName := default "tls.key" .Values.tls.certKeyFilename }}
+            <certificateFile>/bitnami/clickhouse/certs/{{$certFileName}}</certificateFile>
+            <privateKeyFile>/bitnami/clickhouse/certs/{{$keyFileName}}</privateKeyFile>
+            <verificationMode>none</verificationMode>
+            <cacheSessions>true</cacheSessions>
+            <disableProtocols>sslv2,sslv3</disableProtocols>
+            <preferServerCiphers>true</preferServerCiphers>
+            {{- if or .Values.tls.autoGenerated .Values.tls.certCAFilename }}
+            {{- $caFileName := default "ca.crt" .Values.tls.certFilename }}
+            <caConfig>/bitnami/clickhouse/certs/{{$caFileName}}</caConfig>
+            {{- else }}
+            <loadDefaultCAFile>true</loadDefaultCAFile>
+            {{- end }}
+        </server>
+        <client>
+            <loadDefaultCAFile>true</loadDefaultCAFile>
+            <cacheSessions>true</cacheSessions>
+            <disableProtocols>sslv2,sslv3</disableProtocols>
+            <preferServerCiphers>true</preferServerCiphers>
+            <verificationMode>none</verificationMode>
+            <invalidCertificateHandler>
+                <name>AcceptCertificateHandler</name>
+            </invalidCertificateHandler>
+        </client>
+    </openSSL>
+    {{- end }}
+    {{- if .Values.metrics.enabled }}
+     <!-- Prometheus metrics -->
+     <prometheus>
+        <endpoint>/metrics</endpoint>
+        <port from_env="CLICKHOUSE_METRICS_PORT"></port>
+        <metrics>true</metrics>
+        <events>true</events>
+        <asynchronous_metrics>true</asynchronous_metrics>
+    </prometheus>
+    {{- end }}
+  </clickhouse>

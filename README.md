@@ -1,51 +1,55 @@
-cd keeper && make all
+# ClickHouse Cluster with ClickHouse Keeper
 
-SELECT * FROM system.clusters WHERE cluster = 'company_cluster';
+This repository provides a simple example of how to deploy a ClickHouse cluster with ClickHouse Keeper using Docker Compose. The cluster consists of two shards and two replicas.
 
-SELECT * FROM system.dns_cache;
+## Setup
 
-### Хранения данных, когда шард недоступен
-Когда один из шардов упал, и проходит вставка данных, они будут храниться в локальной директории той тачки на которой был выполнен запрос вставки.
+1. Ensure Docker is installed and running on your system.
 
-**Пример: Недоступно 3 шарда**
-```sh
-I have no name!@clickhouse04:/var/lib/clickhouse/store/047/04780175-b88c-4756-82f4-b487c0165469$ du -sh ./* --summarize
-12K	./shard1_replica1
-28K	./shard2_replica1
-12K	./shard3_replica1
-```
-### Тестовые команды
+2. Clone this repository to your local machine.
 
-- Генерация данных
+3. Open a terminal window and navigate to the project directory.
 
-```sql
-INSERT INTO company_db.events_distr SELECT
-    now(),
-    rand(1),
-    if((rand() % 2) = 0, 'view', 'contact')
-FROM numbers(1250000000)
-```
-- Проверка размера
-```sql
-SELECT
-    sum(bytes) AS total_size_bytes,
-    formatReadableSize(sum(bytes)) AS total_size_human
-FROM system.parts
-WHERE (`table` = 'events') AND (database = 'company_db')
+## Usage
+
+### Start the Cluster
+
+To start the cluster, run the following command:
+
+```bash
+make up
 ```
 
-```sql
-SELECT count(*) FROM company_db.events;
+This will start the ClickHouse server and keeper containers.
+The containers will be named `clickhouse-<shard-id>-<replica-id>` and `clickhouse-keeper-<id>`.
+
+#### Grafana
+Optionally, you can start Grafana by running the following command:
+
+```bash
+make up-with-grafana
 ```
-**debug**
+This will start the ClickHouse server, keeper, and Grafana containers. The Grafana will be available at `http://localhost:3000`.
 
-SYSTEM SYNC REPLICA company_db.events;
 
-SET allow_unrestricted_reads_from_keeper = 1;
+### Access ClickHouse Client
 
-- проверка участников zookeeper
+To access the ClickHouse client, you can run the following command:
 
-SELECT * FROM system.zookeeper;
+```bash
+make client
+```
 
-- детально
-SET asterisk_include_materialized_columns=1;
+This will open a bash terminal in the container for the first ClickHouse server (`clickhouse-01-01`), allowing you to execute SQL queries against the cluster.
+
+### Stop the Cluster
+
+To stop the cluster, run the following command:
+
+```bash
+make down
+```
+```console
+$ helm repo add my-repo https://charts.bitnami.com/bitnami
+$ helm install my-release my-repo/clickhouse
+```

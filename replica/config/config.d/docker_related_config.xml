@@ -15,4 +15,11 @@
         <database>system</database>
         <table>query_log</table>
     </query_log>
+    <!-- <interserver_http_port remove="remove"/>
+    <interserver_https_port>9010</interserver_https_port>
+    <interserver_https_host from_env="HOSTNAME"></interserver_https_host> -->
+    <!-- <tcp_port remove="remove"/> -->
+    <!-- <tcp_port_secure>9440</tcp_port_secure> -->
+    <!-- <http_port remove="remove"/> -->
+    <!-- <https_port>8443</https_port> -->
 </clickhouse>

@@ -8,6 +8,8 @@ GRAFANA := grafana/docker-compose.yml
 SQL_SETUP=commands/setup.sql
 SQL_INSERT=commands/insert.sql
 
+K_PASSWD := $(shell kubectl get secret --namespace lm-stage my-release-clickhouse -o jsonpath="{.data.admin-password}" | base64 -d)
+
 PWD := $(shell pwd)
 VM := ${PWD}/volumes
 
@@ -31,7 +33,7 @@ grafana:
 	@echo "----------------------------------------"
 	@echo "Grafana is running on http://localhost:3000"
 	@echo "Username: admin Password: admin"
-	@echo "Add Clickhouse datasource with Server Address: clickhouse01:9000"
+	@echo "Add Clickhouse datasource with Server Address: clickhouse-01-01:9000"
 	@echo "Username: 'default' with no password"
 	@echo "----------------------------------------"
 
@@ -45,7 +47,7 @@ down-k:
 down-ch:
 	docker compose -f ${REPLECA} down
 
-.PHONY: down-g
+.PHONY: down-g keeper
 down-g:
 	docker compose -f ${GRAFANA} down
 
@@ -56,27 +58,40 @@ re-ch:
 	docker compose -f ${REPLECA} restart
 
 in:
-	docker compose -f ${REPLECA} exec clickhouse01 bash
+	docker compose -f ${REPLECA} exec clickhouse-01-01 bash
 
 cli:
-	docker compose -f ${REPLECA} exec clickhouse01 clickhouse-client
+	docker compose -f ${REPLECA} exec clickhouse-01-01 clickhouse-client
 
 keeper:
-	docker compose -f ${KEEPER} exec keeper1 clickhouse-keeper-client
+	docker compose -f ${KEEPER} exec -u root keeper1 clickhouse-keeper-client
 
 all: config up-k up-ch
 
 setup:
 	@echo "Running SQL file: $(SQL_SETUP)..."
-	@cat $(SQL_SETUP) | docker compose -f ${REPLECA} exec -T clickhouse01 clickhouse-client --multiquery
+	@cat $(SQL_SETUP) | docker compose -f ${REPLECA} exec -T clickhouse-01-01 clickhouse-client --multiquery
 
 insert:
 	@echo "Running SQL file: $(SQL_INSERT)..."
-	@cat $(SQL_INSERT) | docker compose -f ${REPLECA} exec -T clickhouse01 clickhouse-client --multiquery
+	@cat $(SQL_INSERT) | docker compose -f ${REPLECA} exec -T clickhouse-01-01 clickhouse-client --multiquery
 
 read:
-	docker compose -f ${REPLECA} exec -T clickhouse01 clickhouse-client -q "SELECT count(*) FROM company_db.events_distr;"
+	docker compose -f ${REPLECA} exec -T clickhouse-01-01 clickhouse-client -q "SELECT count(*) FROM company_db.events_distr;"
 
 trun:
-	docker compose -f ${REPLECA} exec -T clickhouse01 clickhouse-client -q "TRUNCATE TABLE company_db.events ON CLUSTER '{cluster}';"
+	docker compose -f ${REPLECA} exec -T clickhouse-01-01 clickhouse-client -q "TRUNCATE TABLE company_db.events ON CLUSTER '{cluster}';"
 
+.PHONY: k-setup k-insert
+k-setup:
+	@echo "Running SQL file: $(SQL_SETUP)..."
+	@echo ${K_PASSWD}
+	cat $(SQL_SETUP) | kubectl exec -i my-release-clickhouse-shard0-0 -- clickhouse-client --password ${K_PASSWD} --multiquery
+
+k-insert:
+	@echo "Running SQL file: $(SQL_INSERT)..."
+	@echo ${K_PASSWD}
+	@cat $(SQL_INSERT) | kubectl exec -i my-release-clickhouse-shard0-0 -- clickhouse-client --password ${K_PASSWD} --multiquery
+
+k-cli:
+	@kubectl exec -it my-release-clickhouse-shard0-0 -- clickhouse-client --password ${K_PASSWD}
