@@ -6,7 +6,7 @@
             <receive_timeout>3</receive_timeout> <!-- 3 секунды на подключение. Для тежелых запросов лучше не менять -->
             <skip_unavailable_shards>1</skip_unavailable_shards> <!-- Игнорируем недоступные шарды -->
             <!-- <insert_distributed_sync>0</insert_distributed_sync> Асинхронная вставка без ожидания -->
-            <insert_quorum>1</insert_quorum> <!-- записанные данные гарантированно сохраняются как минимум на одной реплике каждого шарда -->
+            <!-- <insert_quorum>1</insert_quorum> записанные данные гарантированно сохраняются как минимум на одной реплике каждого шарда -->
             <!-- <insert_quorum_timeout>60</insert_quorum_timeout> -->
             <prefer_localhost_replica>true</prefer_localhost_replica>  <!--  -->
             <connect_timeout_with_failover_ms>750</connect_timeout_with_failover_ms> <!-- 0.75 сек на переключение -->
