@@ -9,12 +9,12 @@
                     <user from_env="CLICKHOUSE_ADMIN_USER"></user>
                     <password from_env="CLICKHOUSE_ADMIN_PASSWORD"></password>
                 </replica>
-                <replica>
+                <!-- <replica>
                     <host>clickhouse-01-02</host>
                     <port>9000</port>
                     <user from_env="CLICKHOUSE_ADMIN_USER"></user>
                     <password from_env="CLICKHOUSE_ADMIN_PASSWORD"></password>
-                </replica>
+                </replica> -->
             </shard>
             <shard>
                 <internal_replication>true</internal_replication>

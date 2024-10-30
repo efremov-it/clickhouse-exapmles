@@ -1,19 +1,21 @@
 tolerations:
-  - key: "node-role.kubernetes.io/worker-staging"
+  - key: "node-role.kubernetes.io/clickhouse"
     operator: "Equal"
     value: "true"
     effect: "NoSchedule"
-  - key: "node-role.kubernetes.io/worker"
+  - key: "node-role.kubernetes.io/nats"
     operator: "Equal"
     value: "true"
     effect: "NoSchedule"
+nodeSelector:
+  node-role.kubernetes.io/nats: "true"
 
-shards: 1
-
+shards: 3
+podAntiAffinityCustom: true
 ## @param replicaCount Number of ClickHouse replicas per shard to deploy
 ## if keeper enable, same as keeper count, keeper cluster by shards.
 ##
-replicaCount: 3
+replicaCount: 2
 
 resources:
   limits:
@@ -24,13 +26,13 @@ resources:
     memory: 256Mi
 
 keeper:
-  enabled: true
+  enabled: false
 
 zookeeper:
-  enabled: false
+  enabled: true
   replicaCount: 1
   tolerations:
-  - key: "node-role.kubernetes.io/worker"
+  - key: "node-role.kubernetes.io/nats"
     operator: "Equal"
     value: "true"
     effect: "NoSchedule"

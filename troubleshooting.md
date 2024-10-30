@@ -4,6 +4,87 @@ SELECT * FROM system.clusters WHERE cluster = 'company_cluster';
 
 SELECT * FROM system.dns_cache;
 
+# Ошибки при вставке/выборке данных
+
+В текущей версии CH `harbor.rvision.pro/sec/clickhouse:23.2.6.34-init-20240529` **НЕВОЗМОЖНО** настроить продолжение работы кластера при потере одного из шардов.
+Необходимо использовать образ на `24.7.4.51-distroless-20240529`
+
+## 1. Основные шаги проверки кластера (шардирование и шардирование + репликация)
+
+### 1.1 **Проверка конфигурации кластера**
+
+Прежде чем начинать проверку, убедитесь, что конфигурация кластера настроена корректно:
+- Проверьте конфигурационный файл ClickHouse (`<remote_servers>` в `config.xml`) на наличие правильной структуры для шардирования и репликации.
+- Убедитесь, что параметр `<internal_replication>` установлен в `true`, если используется репликация.
+- Для каждой реплики укажите правильные адреса хостов и порты.
+
+### 1.3 **Проверка работы Keeper**
+
+ > Если реплики работают в режиме `readOnly`, это может указывать на проблемы с Keeper или синхронизацией.
+
+- Проверьте состояние ClickHouse Keeper (или ZooKeeper) через команду `system.zookeeper`:
+  ```sql
+  SELECT * FROM system.zookeeper WHERE path = '/clickhouse/tables/cluster_2S_2R';
+  ```
+
+```sh
+┌─name──────────┬─value─┬─path────────────────┐
+│ cluster_2S_2R │       │ /clickhouse/tables/ │
+└───────────────┴───────┴─────────────────────┘
+```
+Дальше, в зависимости от имени кластера, шарда и таблиц которые нас интересуют, указываем их в запросах
+
+```sql
+SELECT * FROM system.zookeeper WHERE path = '/clickhouse/tables/cluster_2S_2R';
+```
+
+```sh
+┌─name────┬─value─┬─path─────────────────────────────┐
+│ shard01 │       │ /clickhouse/tables/cluster_2S_2R │
+│ shard02 │       │ /clickhouse/tables/cluster_2S_2R │
+└─────────┴───────┴──────────────────────────────────┘
+```
+
+Это поможет убедиться, что шарды и реплики правильно зарегистрированы в Keeper, и что его состояние актуально.
+
+### 1.4 **Вставка данных с проверкой шардирования и репликации**
+
+- Выполните вставку данных в таблицу и проверьте, на каком шарде они размещаются:
+  ```sql
+  INSERT INTO my_table (col1, col2) VALUES (1, 'test');
+  ```
+
+- Для проверки вставки данных на репликах используйте:
+  ```sql
+  SELECT * FROM my_table WHERE _shard_num = 1;
+  ```
+
+## 2. Основные ошибки при работе с шардированием и репликацией
+
+### 2.1 **Ошибки репликации**
+Если одна из реплик перестала реплицироваться корректно, возможно, возникли ошибки в очереди репликации.
+
+- Проверьте таблицу очереди репликации:
+  ```sql
+  SELECT * FROM system.replication_queue WHERE last_exception != '';
+  ```
+
+Ошибки могут указывать на проблемы с сетью, нарушениями данных или временными недоступностями реплик.
+
+### 2.3 **Ошибка вставки с кворумом**
+Ошибка вставки с кворумом может произойти, если недостаточно реплик для выполнения кворумной вставки.
+
+- Проверьте, что все реплики доступны:
+  ```sql
+  SELECT * FROM system.replicas WHERE is_readonly = 1;
+  ```
+
+Если репликация работает корректно, данные должны быть видны на всех репликах, которые относятся к одному шардированному сегменту.
+
+## Проверка 
+
+Проверка репликай
+
 ### Хранения данных, когда шард недоступен
 Когда один из шардов упал, и проходит вставка данных, они будут храниться в локальной директории той тачки на которой был выполнен запрос вставки.
 
@@ -77,7 +158,7 @@ SET asterisk_include_materialized_columns=1;
 
 troubleshooting
 
-- проверка статуса раплик
+- проверка статуса реплик
 
 ```sql
 SELECT * FROM system.replication_queue WHERE table = 'events';
@@ -109,42 +190,43 @@ SELECT partition FROM system.parts WHERE table = 'events';
 1. Проверить точно ли текущая реплика является клоном потерянной
 `SELECT * FROM system.replicas WHERE table = 'events' FORMAT Vertical;`
 
-Премерный вывод
-```sh
-database:                    company_db
-table:                       events
-engine:                      ReplicatedMergeTree
-is_leader:                   1
-can_become_leader:           1
-is_readonly:                 0
-is_session_expired:          0
-future_parts:                0
-parts_to_check:              0
-zookeeper_path:              /clickhouse/tables/company_cluster/01/events
-replica_name:                clickhouse01
-replica_path:                /clickhouse/tables/company_cluster/01/events/replicas/clickhouse01
-columns_version:             -1
-queue_size:                  0
-inserts_in_queue:            0
-merges_in_queue:             0
-part_mutations_in_queue:     0
-queue_oldest_time:           1970-01-01 03:00:00
-inserts_oldest_time:         1970-01-01 03:00:00
-merges_oldest_time:          1970-01-01 03:00:00
-part_mutations_oldest_time:  1970-01-01 03:00:00
-oldest_part_to_get:          
-oldest_part_to_merge_to:     
-oldest_part_to_mutate_to:    
-log_max_index:               1
-log_pointer:                 2
-last_queue_update:           1970-01-01 03:00:00
-absolute_delay:              0
-total_replicas:              2
-active_replicas:             2
-last_queue_update_exception: 
-zookeeper_exception:         
-replica_is_active:           {'clickhouse01':1,'clickhouse02':1}
-```
+* Премерный вывод
+
+    ```sh
+    database:                    company_db
+    table:                       events
+    engine:                      ReplicatedMergeTree
+    is_leader:                   1
+    can_become_leader:           1
+    is_readonly:                 0
+    is_session_expired:          0
+    future_parts:                0
+    parts_to_check:              0
+    zookeeper_path:              /clickhouse/tables/company_cluster/01/events
+    replica_name:                clickhouse01
+    replica_path:                /clickhouse/tables/company_cluster/01/events/replicas/clickhouse01
+    columns_version:             -1
+    queue_size:                  0
+    inserts_in_queue:            0
+    merges_in_queue:             0
+    part_mutations_in_queue:     0
+    queue_oldest_time:           1970-01-01 03:00:00
+    inserts_oldest_time:         1970-01-01 03:00:00
+    merges_oldest_time:          1970-01-01 03:00:00
+    part_mutations_oldest_time:  1970-01-01 03:00:00
+    oldest_part_to_get:          
+    oldest_part_to_merge_to:     
+    oldest_part_to_mutate_to:    
+    log_max_index:               1
+    log_pointer:                 2
+    last_queue_update:           1970-01-01 03:00:00
+    absolute_delay:              0
+    total_replicas:              2
+    active_replicas:             2
+    last_queue_update_exception: 
+    zookeeper_exception:         
+    replica_is_active:           {'clickhouse01':1,'clickhouse02':1}
+    ```
 
 2. Удаление метаданных реплики
 `SYSTEM DROP REPLICA 'clickhouse01';`
@@ -165,7 +247,7 @@ replica_is_active:           {'clickhouse02':1}
 
 4. Провести данную операцию для каждой таблицы.
 
-во время падения, одна реплика остается в рабочем состоянии, но запись всеравно будет идти поочередно (асинхронно). При этом, данные которые будут направляться на недоступные шарды, будут сохраняться в локальной директории
+во время падения, одна реплика остается в рабочем состоянии, но запись все равно будет идти поочередно (асинхронно). При этом, данные которые будут направляться на недоступные шарды, будут сохраняться в локальной директории
 
 В данном примере в рабочем состоянии находится только 3-я нода (2 шард первая реплика)
 
@@ -184,3 +266,17 @@ FROM system.replicas
 WHERE table = 'events'
 FORMAT Vertical
 ```
+
+Конфигурация таблиц в Keeper
+
+Таблицы, использующие механизм внутренней репликации, должны быть зарегистрированы в Keeper под соответствующими путями. Пример правильной структуры каталогов в Keeper:
+
+/ :) ls "/clickhouse/tables/cluster_2S_2R"
+/shard01
+/shard02
+
+/ :) ls "/clickhouse/tables/cluster_2S_2R/shard02/"
+/events
+
+Каждая таблица должна быть зарегистрирована для каждого шарда (например, shard01, shard02) в кластере.
+Внутри каждого шарда должно быть указано имя таблицы, которое будет синхронизироваться между репликами.
