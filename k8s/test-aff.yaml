@@ -1,12 +1,15 @@
 tolerations:
-  - key: "node-role.kubernetes.io/worker-staging"
+  - key: "node-role.kubernetes.io/clickhouse"
     operator: "Equal"
     value: "true"
     effect: "NoSchedule"
-  - key: "node-role.kubernetes.io/worker"
+  - key: "node-role.kubernetes.io/nats"
     operator: "Equal"
     value: "true"
     effect: "NoSchedule"
+
+nodeSelector:
+  node-role.kubernetes.io/clickhouse: "true"
 
 shards: 3
 
@@ -14,34 +17,6 @@ shards: 3
 ## if keeper enable, same as keeper count, keeper cluster by shards.
 ##
 replicaCount: 2
-
-affinity:
-  podAntiAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      - labelSelector:
-          matchLabels:
-            shard: "0"  # Применяется только к подам, у которых label shard=0
-          matchExpressions:
-            - key: "shard"
-              operator: In
-              values:
-                - "0"
-      - labelSelector:
-          matchLabels:
-            shard: "1"  # Применяется только к подам, у которых label shard=0
-          matchExpressions:
-            - key: "shard"
-              operator: In
-              values:
-                - "1"
-      - labelSelector:
-          matchLabels:
-            shard: "2"  # Применяется только к подам, у которых label shard=0
-          matchExpressions:
-            - key: "shard"
-              operator: In
-              values:
-                - "2"
 
 resources:
   limits:
@@ -52,17 +27,13 @@ resources:
     memory: 256Mi
 
 keeper:
-  enabled: true
+  enabled: false
 
 zookeeper:
-  enabled: false
+  enabled: true
   replicaCount: 1
   tolerations:
-  - key: "node-role.kubernetes.io/worker"
-    operator: "Equal"
-    value: "true"
-    effect: "NoSchedule"
-  - key: "node-role.kubernetes.io/worker-staging"
+  - key: "node-role.kubernetes.io/clickhouse"
     operator: "Equal"
     value: "true"
     effect: "NoSchedule"
@@ -70,11 +41,127 @@ zookeeper:
     ports:
       client: 2181
 
-metrics:
-  ## @param metrics.enabled Enable the export of Prometheus metrics
-  ##
-  enabled: false
+# podLabels:
+#   replica: "{{ .spec.replicas | default 0 }}"
 
+# podLabels:
+#   replica: "{{ .name | regexReplaceAll '(.*-)([0-9]+)$' '$2' }}"
+
+
+# affinity:
+#   podAntiAffinity:
+#     requiredDuringSchedulingIgnoredDuringExecution:
+#       - labelSelector:
+#           matchExpressions:
+#             - key: "apps.kubernetes.io/pod-index"
+#               operator: In
+#               values:
+#                 - "0"
+#         topologyKey: "kubernetes.io/hostname"
+#       - labelSelector:
+#           matchExpressions:
+#             - key: "shard"
+#               operator: In
+#               values:
+#                 - "0"
+#             - key: "apps.kubernetes.io/pod-index"
+#               operator: In
+#               values:
+#                 - "1"
+#         topologyKey: "kubernetes.io/hostname"
+#       - labelSelector:
+#           matchExpressions:
+#             - key: "shard"
+#               operator: In
+#               values:
+#                 - "1"
+#             - key: "apps.kubernetes.io/pod-index"
+#               operator: In
+#               values:
+#                 - "1"
+#         topologyKey: "kubernetes.io/hostname"
+#       - labelSelector:
+#           matchExpressions:
+#             - key: "shard"
+#               operator: In
+#               values:
+#                 - "2"
+#             - key: "apps.kubernetes.io/pod-index"
+#               operator: In
+#               values:
+#                 - "0"
+#                 - "1"
+#         topologyKey: "kubernetes.io/hostname"
+affinity:
+  podAntiAffinity:
+    shards: 
+      - requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: "shard"
+                operator: In
+                values:
+                  - "0"
+          topologyKey: "kubernetes.io/hostname"
+      - requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: "shard"
+                operator: In
+                values:
+                  - "1"
+          topologyKey: "kubernetes.io/hostname"
+      - requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: "shard"
+                operator: In
+                values:
+                  - "2"
+          topologyKey: "kubernetes.io/hostname"
+    # preferredDuringSchedulingIgnoredDuringExecution:
+    #   - weight: 1
+    #     podAffinityTerm:
+    #       labelSelector:
+    #         matchExpressions:
+    #           - key: "shard"
+    #             operator: In
+    #             values:
+    #               - "0"
+    #           - key: "apps.kubernetes.io/pod-index"
+    #             operator: In
+    #             values:
+    #               - "0"
+    #               - "1"
+    #       topologyKey: "kubernetes.io/hostname"
+    #   - weight: 1
+    #     podAffinityTerm:
+    #       labelSelector:
+    #         matchExpressions:
+    #           - key: "shard"
+    #             operator: In
+    #             values:
+    #               - "1"
+    #           - key: "apps.kubernetes.io/pod-index"
+    #             operator: In
+    #             values:
+    #               - "0"
+    #               - "1"
+    #       topologyKey: "kubernetes.io/hostname"
+    #   - weight: 1
+    #     podAffinityTerm:
+    #       labelSelector:
+    #         matchExpressions:
+    #           - key: "shard"
+    #             operator: In
+    #             values:
+    #               - "2"
+    #           - key: "apps.kubernetes.io/pod-index"
+    #             operator: In
+    #             values:
+    #               - "0"
+    #               - "1"
+    #       topologyKey: "kubernetes.io/hostname"
 
 # extraOverrides: |
 #   <clickhouse>
@@ -142,6 +229,9 @@ metrics:
 #   </zookeeper>
 # </clickhouse>
 
+metrics:
+  enabled: false
+
 defaultConfigurationOverrides: |
   <clickhouse>
     <!-- Macros -->
@@ -163,7 +253,7 @@ defaultConfigurationOverrides: |
         {{- range $shard, $e := until $shards }}
         <shard>
             {{- $replicas := $.Values.replicaCount | int }}
-            {{- if gt $replicas 1 }}
+            {{- if gt $replicas 1 }} <!-- если больше чем 1 реплика в шарде, тогда используем внутреннюю репликацию -->
             <internal_replication>true</internal_replication>
             {{- end }}
             {{- range $i, $_e := until $replicas }}

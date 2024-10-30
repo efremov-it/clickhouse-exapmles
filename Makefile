@@ -82,7 +82,11 @@ read:
 trun:
 	docker compose -f ${REPLECA} exec -T clickhouse-01-01 clickhouse-client -q "TRUNCATE TABLE company_db.events ON CLUSTER '{cluster}';"
 
-.PHONY: k-setup k-insert
+.PHONY: k-up k-setup k-insert
+
+k-up:
+	helm install ch-cluster bitnami/clickhouse --version 6.3.0 --values k8s/test.yaml
+
 k-setup:
 	@echo "Running SQL file: $(SQL_SETUP)..."
 	@echo ${K_PASSWD}

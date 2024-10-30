@@ -50,6 +50,7 @@ To stop the cluster, run the following command:
 make down
 ```
 ```console
-$ helm repo add my-repo https://charts.bitnami.com/bitnami
-$ helm install my-release my-repo/clickhouse
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo update
+helm upgrade --install ch-cluster bitnami/clickhouse --version 6.3.0 --values k8s/test.yaml
 ```
