@@ -55,7 +55,7 @@ spec:
       affinity:
         podAffinity: {{- include "common.affinities.pods" (dict "type" $.Values.podAffinityPreset "component" "clickhouse" "customLabels" $podLabels "context" $) | nindent 10 }}
         podAntiAffinity:
-          {{- if $.Values.podAntiAffinityCustom }}
+          {{- if $.Values.podAntiAffinityShard }}
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
                 matchExpressions:

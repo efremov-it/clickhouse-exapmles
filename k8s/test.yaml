@@ -10,40 +10,41 @@ tolerations:
 nodeSelector:
   node-role.kubernetes.io/nats: "true"
 
-shards: 3
-podAntiAffinityCustom: true
+shards: 2
+
 ## @param replicaCount Number of ClickHouse replicas per shard to deploy
 ## if keeper enable, same as keeper count, keeper cluster by shards.
 ##
-replicaCount: 2
+replicaCount: 3
+podAntiAffinityShard: true
 
-affinity:
-  podAntiAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      - labelSelector:
-          matchLabels:
-            shard: "0"  # Применяется только к подам, у которых label shard=0
-          matchExpressions:
-            - key: "shard"
-              operator: In
-              values:
-                - "0"
-      - labelSelector:
-          matchLabels:
-            shard: "1"  # Применяется только к подам, у которых label shard=0
-          matchExpressions:
-            - key: "shard"
-              operator: In
-              values:
-                - "1"
-      - labelSelector:
-          matchLabels:
-            shard: "2"  # Применяется только к подам, у которых label shard=0
-          matchExpressions:
-            - key: "shard"
-              operator: In
-              values:
-                - "2"
+# affinity:
+#   podAntiAffinity:
+#     requiredDuringSchedulingIgnoredDuringExecution:
+#       - labelSelector:
+#           matchLabels:
+#             shard: "0"  # Применяется только к подам, у которых label shard=0
+#           matchExpressions:
+#             - key: "shard"
+#               operator: In
+#               values:
+#                 - "0"
+#       - labelSelector:
+#           matchLabels:
+#             shard: "1"  # Применяется только к подам, у которых label shard=0
+#           matchExpressions:
+#             - key: "shard"
+#               operator: In
+#               values:
+#                 - "1"
+#       - labelSelector:
+#           matchLabels:
+#             shard: "2"  # Применяется только к подам, у которых label shard=0
+#           matchExpressions:
+#             - key: "shard"
+#               operator: In
+#               values:
+#                 - "2"
 
 resources:
   limits:
