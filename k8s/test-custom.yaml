@@ -1,0 +1,40 @@
+tolerations:
+  - key: "node-role.kubernetes.io/clickhouse"
+    operator: "Equal"
+    value: "true"
+    effect: "NoSchedule"
+  - key: "node-role.kubernetes.io/nats"
+    operator: "Equal"
+    value: "true"
+    effect: "NoSchedule"
+nodeSelector:
+  node-role.kubernetes.io/nats: "true"
+
+shards: 2
+
+## @param replicaCount Number of ClickHouse replicas per shard to deploy
+## if keeper enable, same as keeper count, keeper cluster by shards.
+##
+replicaCount: 2
+podAntiAffinityShard: true
+
+resources:
+  limits:
+    cpu: 2
+    memory: 8Gi
+  requests:
+    cpu: 125m
+    memory: 512Mi
+
+externalKeeper:
+  auth:
+    password: supertest
+  enabled: true
+
+keeper:
+  enabled: false
+
+zookeeper:
+  enabled: false
+metrics:
+  enabled: false
