@@ -15,51 +15,346 @@ shards: 2
 ## @param replicaCount Number of ClickHouse replicas per shard to deploy
 ## if keeper enable, same as keeper count, keeper cluster by shards.
 ##
-replicaCount: 3
+replicaCount: 2
 podAntiAffinityShard: true
-
-# affinity:
-#   podAntiAffinity:
-#     requiredDuringSchedulingIgnoredDuringExecution:
-#       - labelSelector:
-#           matchLabels:
-#             shard: "0"  # Применяется только к подам, у которых label shard=0
-#           matchExpressions:
-#             - key: "shard"
-#               operator: In
-#               values:
-#                 - "0"
-#       - labelSelector:
-#           matchLabels:
-#             shard: "1"  # Применяется только к подам, у которых label shard=0
-#           matchExpressions:
-#             - key: "shard"
-#               operator: In
-#               values:
-#                 - "1"
-#       - labelSelector:
-#           matchLabels:
-#             shard: "2"  # Применяется только к подам, у которых label shard=0
-#           matchExpressions:
-#             - key: "shard"
-#               operator: In
-#               values:
-#                 - "2"
 
 resources:
   limits:
-    cpu: 1
-    memory: 4Gi
+    cpu: 2
+    memory: 8Gi
   requests:
     cpu: 125m
-    memory: 256Mi
+    memory: 512Mi
+
+# externalZookeeper:
+#   ## @param externalZookeeper.servers List of external zookeeper servers to use
+#   ## @param externalZookeeper.port Port of the Zookeeper servers
+#   ##
+#   servers:
+#     - ch-cluster-keeper-shard0-0.ch-cluster-keeper-headless.clickhouse.svc.cluster.local
+#     - ch-cluster-keeper-shard0-1.ch-cluster-keeper-headless.clickhouse.svc.cluster.local
+#     - ch-cluster-keeper-shard0-2.ch-cluster-keeper-headless.clickhouse.svc.cluster.local
+#   port: 2128
+
+externalKeeper:
+  enabled: true
+  nameOverride: keeper
+  keeper:
+    enabled: true
+  shards: 1
+  replicaCount: 3
+  zookeeper:
+    enabled: false
+  metrics:
+    enabled: false
+  service:
+    ports:
+      keeperInter: 9444
+      client: 2128
+  containerPorts:
+    keeper: 2128
+    keeperInter: 9444
+  containerSecurityContext:
+    enabled: true
+  customReadinessProbe:
+    tcpSocket:
+      port: tcp-keeperinter
+    initialDelaySeconds: 15
+    periodSeconds: 10
+  customLivenessProbe:
+    tcpSocket:
+      port: tcp-keeper
+    initialDelaySeconds: 15
+    periodSeconds: 10
+  logLevel: information
+  sidecars:
+    - name: debug-container
+      image: node:lts-slim
+      imagePullPolicy: Always
+      command: ["sleep"]
+      args: ["30000"]
+      volumeMounts:
+      - name: tz
+        mountPath: /etc/localtime
+        readOnly: true
+      - name: config
+        mountPath: /opt/clickhouse/default/
+      - name: shared-config
+        mountPath: /etc/clickhouse-server/config.d/00_default_overrides.xml
+        subPath: 00_default_overrides.xml
+  #   capabilities:
+  #     add:
+  #       - NET_BIND_SERVICE
+  # command: ["clickhouse-keeper"]
+  # args: ["--config", "/bitnami/clickhouse/etc/keeper.xml" ]
+  # command:
+  #   - /bin/bash
+  #   - -c
+  #   - |
+  #     if [[ -f "/bitnami/clickhouse/keeper/data/myid" ]]; then
+  #         export KEEPER_SERVER_ID="$(cat /bitnami/clickhouse/keeper/data/myid)";
+  #     else
+  #         HOSTNAME="$(hostname -s)";
+  #         if [[ $HOSTNAME =~ (.*)-([0-9]+)$ ]]; then
+  #             export KEEPER_SERVER_ID=${BASH_REMATCH[2]};
+  #         else
+  #             echo "Failed to get index from hostname $HOSTNAME";
+  #             exit 1;
+  #         fi;
+  #     fi;
+  #     exec clickhouse keeper --config /bitnami/clickhouse/etc/keeper.xml
+  args: ["keeper", "--config", "/etc/clickhouse-server/config.d/00_default_overrides.xml"]
+  # auth:
+  #   username: default
+  #   password: "default"
+  defaultConfigurationOverrides: |
+    <?xml version="1.0"?>
+          <clickhouse>
+              <!-- <shard> нужен для отрабатывания initContainer скрипта -->
+              <logger>
+                  <level>{{ .Values.logLevel }}</level>
+                  <console>true</console>
+              </logger>
+
+              <interserver_listen_host>0.0.0.0</interserver_listen_host>
+              <listen_host>0.0.0.0</listen_host>
+
+              <!-- <grpc_port>9100</grpc_port> -->
+
+              <path>/bitnami/clickhouse</path>
+              <tmp_path>/bitnami/clickhouse/tmp/</tmp_path>
+              <user_files_path>/bitnami/clickhouse/user_files/</user_files_path>
+              <user_scripts_path>/bitnami/clickhouse/user_scripts/</user_scripts_path>
+              <user_defined_path>/bitnami/clickhouse/user_defined/</user_defined_path>
+
+              <!-- keeper configuration -->
+              <keeper_server>
+                {{/*ClickHouse keeper configuration using the helm chart */}}
+                <tcp_port>{{ $.Values.containerPorts.keeper }}</tcp_port>
+                {{- if .Values.tls.enabled }}
+                <tcp_port_secure>{{ $.Values.containerPorts.keeperSecure }}</tcp_port_secure>
+                {{- end }}
+                <server_id>SERVER_ID_PLACEHOLDER</server_id>
+                <log_storage_path>/bitnami/clickhouse/logs</log_storage_path>
+                <snapshot_storage_path>/bitnami/clickhouse/snapshots</snapshot_storage_path>
+
+                <coordination_settings>
+                    <operation_timeout_ms>10000</operation_timeout_ms>
+                    <session_timeout_ms>30000</session_timeout_ms>
+                    <raft_logs_level>trace</raft_logs_level>
+                </coordination_settings>
+
+                <raft_configuration>
+                {{- $replicas := $.Values.replicaCount | int }}
+                {{- $shards := $.Values.shards | int }}
+                {{- $servers := mul $replicas $shards }}
+                {{- range $j := until ($servers | int) }}
+                <server>
+                  <id>{{ $j | int }}</id>
+                  <hostname from_env="{{ printf "KEEPER_NODE_%d" $j }}"></hostname>
+                  <port>{{ $.Values.service.ports.keeperInter }}</port>
+                </server>
+                {{- end }}
+                </raft_configuration>
+              </keeper_server>
+          </clickhouse>
+  # extraDeploy:
+  #   - apiVersion: v1
+  #     kind: ConfigMap
+  #     metadata:
+  #       name: clickhouse-keeper-config
+  #     data:
+  #       keeper.xml: |-
+  #         <?xml version="1.0"?>
+  #         <clickhouse>
+  #             <logger>
+  #                 <level>trace</level>
+  #                 <console>true</console>
+  #                 <log remove="remove"/>
+  #                 <errorlog remove="remove"/>
+  #             </logger>
+
+  #             <interserver_listen_host>0.0.0.0</interserver_listen_host>
+  #             <listen_host>0.0.0.0</listen_host>
+
+  #             <path>/bitnami/clickhouse</path>
+  #             <tmp_path>/bitnami/clickhouse/tmp/</tmp_path>
+  #             <user_files_path>/bitnami/clickhouse/user_files/</user_files_path>
+
+  #             <!-- keeper configuration -->
+  #             <keeper_server>
+  #               {{/*ClickHouse keeper configuration using the helm chart */}}
+  #               <tcp_port>{{ $.Values.containerPorts.keeper }}</tcp_port>
+  #               {{- if .Values.tls.enabled }}
+  #               <tcp_port_secure>{{ $.Values.containerPorts.keeperSecure }}</tcp_port_secure>
+  #               {{- end }}
+  #               <server_id>SERVER_ID_PLACEHOLDER</server_id>
+  #               <log_storage_path>/bitnami/clickhouse/logs</log_storage_path>
+  #               <snapshot_storage_path>/bitnami/clickhouse/snapshots</snapshot_storage_path>
+
+  #               <coordination_settings>
+  #                   <operation_timeout_ms>10000</operation_timeout_ms>
+  #                   <session_timeout_ms>30000</session_timeout_ms>
+  #                   <raft_logs_level>trace</raft_logs_level>
+  #               </coordination_settings>
+
+  #               <raft_configuration>
+  #               {{- $nodes := $.Values.replicaCount | int }}
+  #               {{- range $node, $e := until $nodes }}
+  #               <server>
+  #                 <id>{{ $node | int }}</id>
+  #                 <hostname from_env="{{ printf "KEEPER_NODE_%d" $node }}"></hostname>
+  #                 <port>{{ $.Values.service.ports.keeperInter }}</port>
+  #               </server>
+  #               {{- end }}
+  #               </raft_configuration>
+  #             </keeper_server>
+  #         </clickhouse>
+  # extraVolumes:
+  # - name: keeper-config-volume
+  #   configMap:
+  #     name: clickhouse-keeper-config
+  # - name: tz
+  #   hostPath:
+  #     path: /usr/share/zoneinfo/UTC
+
+  # - name: shared-config
+  #   emptyDir: { }
+  # extraVolumeMounts:
+  # - name: keeper-config-volume
+  #   mountPath: /bitnami/clickhouse/etc/keeper.xml
+  #   subPath: keeper.xml
+  #   readOnly: true
+  # - name: tz
+  #   mountPath: /etc/localtime
+  #   readOnly: true
+
+  # - name: shared-config
+  #   mountPath: /etc/clickhouse-server/config.d/00_default_overrides.xml
+  #   subPath: 00_default_overrides.xml
 
 keeper:
   enabled: false
 
 zookeeper:
-  enabled: true
-  replicaCount: 1
+  enabled: false
+  replicaCount: 3
+  nameOverride: keeper
+  image:
+    registry: docker.io
+    repository: bitnami/clickhouse
+    tag: 24.9.2-debian-12-r2
+  # command: ["clickhouse-keeper"]
+  # command:
+  # - /opt/bitnami/scripts/clickhouse/entrypoint.sh
+  command:
+    - /bin/bash
+    - -c
+    - |
+      if [[ -f "/bitnami/clickhouse/keeper/data/myid" ]]; then
+          export KEEPER_SERVER_ID="$(cat /bitnami/clickhouse/keeper/data/myid)";
+      else
+          HOSTNAME="$(hostname -s)";
+          if [[ $HOSTNAME =~ (.*)-([0-9]+)$ ]]; then
+              export KEEPER_SERVER_ID=${BASH_REMATCH[2]};
+          else
+              echo "Failed to get index from hostname $HOSTNAME";
+              exit 1;
+          fi;
+      fi;
+      exec clickhouse-keeper --config /opt/bitnami/zookeeper/conf/zoo.cfg
+
+  args: [""]
+  # args: ["--config", "/opt/bitnami/zookeeper/conf/zoo.cfg" ]
+  # args: [\"/opt/bitnami/scripts/clickhouse/run.sh\" \"--\" \"--listen_host=0.0.0.0\"]
+  extraEnvVars:
+    - name: KEEPER_ID
+      value: "1"
+    - name: HOME
+      value: "/tmp"
+      
+  # existingConfigmap: clickhouse-keeper-config
+  # containerSecurityContext:
+  #   readOnlyRootFilesystem: true
+  # extraVolumes:
+  # - name: keeper-config-volume
+  #   configMap:
+  #     name: clickhouse-keeper-config
+  # extraVolumeMounts:
+  # - name: keeper-config-volume
+  #   mountPath: /var/lib/clickhouse/preprocessed_configs/keeper.xml
+  #   subPath: keeper.xml
+  #   readOnly: false
+  # extraDeploy:
+  # - apiVersion: v1
+  #   kind: ConfigMap
+  #   metadata:
+  #     name: ch-cluster-keeper-scripts
+  #     labels:
+  #       app.kubernetes.io/component: clickhouse
+  #   data:
+  #     setup.sh: |-
+  #       #!/bin/bash
+
+  #       # Execute entrypoint as usual after obtaining KEEPER_SERVER_ID
+  #       # check KEEPER_SERVER_ID in persistent volume via myid
+  #       # if not present, set based on POD hostname
+  #       if [[ -f "/bitnami/clickhouse/keeper/data/myid" ]]; then
+  #           export KEEPER_SERVER_ID="$(cat /bitnami/clickhouse/keeper/data/myid)"
+  #       else
+  #           HOSTNAME="$(hostname -s)"
+  #           if [[ $HOSTNAME =~ (.*)-([0-9]+)$ ]]; then
+  #               export KEEPER_SERVER_ID=${BASH_REMATCH[2]}
+  #           else
+  #               echo "Failed to get index from hostname $HOST"
+  #               exit 1
+  #           fi
+  #       fi
+  #       exec /opt/bitnami/scripts/clickhouse/entrypoint.sh /opt/bitnami/scripts/clickhouse/run.sh -- --listen_host=0.0.0.0
+
+  configuration: |-
+      <?xml version="1.0"?>
+          <clickhouse>
+              <logger>
+                  <level>information</level>
+                  <console>true</console>
+                  <log remove="remove"/>
+                  <errorlog remove="remove"/>
+              </logger>
+              <path>/opt/bitnami/zookeeper/conf</path>
+              <tmp_path>/opt/bitnami/zookeeper/conf/tmp/</tmp_path>
+              <user_files_path>/opt/bitnami/zookeeper/user_files/</user_files_path>
+
+              <!-- keeper configuration -->
+              <keeper_server>
+                {{/*ClickHouse keeper configuration using the helm chart */}}
+                <tcp_port>{{ $.Values.containerPorts.keeper }}</tcp_port>
+                {{- if .Values.tls.enabled }}
+                <tcp_port_secure>{{ $.Values.containerPorts.keeperSecure }}</tcp_port_secure>
+                {{- end }}
+                <server_id from_env="KEEPER_SERVER_ID"></server_id>
+                <log_storage_path>/bitnami/clickhouse/keeper/coordination/log</log_storage_path>
+                <snapshot_storage_path>/bitnami/clickhouse/keeper/coordination/snapshots</snapshot_storage_path>
+
+                <coordination_settings>
+                    <operation_timeout_ms>10000</operation_timeout_ms>
+                    <session_timeout_ms>30000</session_timeout_ms>
+                    <raft_logs_level>trace</raft_logs_level>
+                </coordination_settings>
+
+                <raft_configuration>
+                {{- $nodes := $.Values.replicaCount | int }}
+                {{- range $node, $e := until $nodes }}
+                <server>
+                  <id>{{ $node | int }}</id>
+                  <hostname from_env="{{ printf "KEEPER_NODE_%d" $node }}"></hostname>
+                  <port>{{ $.Values.service.ports.keeperInter }}</port>
+                </server>
+                {{- end }}
+                </raft_configuration>
+              </keeper_server>
+          </clickhouse>
+  
   tolerations:
   - key: "node-role.kubernetes.io/nats"
     operator: "Equal"
@@ -74,8 +369,6 @@ zookeeper:
       client: 2181
 
 metrics:
-  ## @param metrics.enabled Enable the export of Prometheus metrics
-  ##
   enabled: false
 
 
@@ -104,47 +397,6 @@ metrics:
 #     </remote_servers> 
 #   </clickhouse>
 
-# defaultConfigurationOverrides: |
-# <clickhouse>
-#   <!-- Macros -->
-#   <macros>
-#     <shard from_env="CLICKHOUSE_SHARD_ID"></shard>
-#     <replica from_env="CLICKHOUSE_REPLICA_ID"></replica>
-#     <layer>my-release-clickhouse</layer>
-#   </macros>
-#   <!-- Log Level -->
-#   <logger>
-#     <level>information</level>
-#   </logger>
-#   <!-- Cluster configuration - Any update of the shards and replicas requires helm upgrade -->
-#   <remote_servers>
-#     <default>
-#       <shard>
-#           <replica>
-#               <host>my-release-clickhouse-shard0-0.my-release-clickhouse-headless.lm-stage.svc.cluster.local</host>
-#               <port>9000</port>
-#               <user from_env="CLICKHOUSE_ADMIN_USER"></user>
-#               <password from_env="CLICKHOUSE_ADMIN_PASSWORD"></password>
-#           </replica>
-#           <replica>
-#               <host>my-release-clickhouse-shard0-1.my-release-clickhouse-headless.lm-stage.svc.cluster.local</host>
-#               <port>9000</port>
-#               <user from_env="CLICKHOUSE_ADMIN_USER"></user>
-#               <password from_env="CLICKHOUSE_ADMIN_PASSWORD"></password>
-#           </replica>
-#       </shard>
-#     </default>
-#   </remote_servers>
-#   <!-- Zookeeper configuration -->
-#   <zookeeper>
-    
-#     <node>
-#       <host from_env="KEEPER_NODE_0"></host>
-#       <port>2181</port>
-#     </node>
-#   </zookeeper>
-# </clickhouse>
-
 defaultConfigurationOverrides: |
   <clickhouse>
     <!-- Macros -->
@@ -158,6 +410,16 @@ defaultConfigurationOverrides: |
     <logger>
       <level>{{ .Values.logLevel }}</level>
     </logger>
+    <profiles>
+      <default>
+        <connect_timeout>2</connect_timeout> <!-- 2 секунды на прием -->
+        <skip_unavailable_shards>1</skip_unavailable_shards> <!-- Игнорируем недоступные шарды -->
+        <insert_distributed_sync>0</insert_distributed_sync> <!-- Асинхронная вставка без ожидания -->
+        <prefer_localhost_replica>true</prefer_localhost_replica> <!-- приоритет на локальную реплику (на которую был отправлен запрос), если она доступна (только чтение) -->
+        <connect_timeout_with_failover_ms>750</connect_timeout_with_failover_ms> <!-- 0.75 сек на переключение -->
+        <connections_with_failover_max_tries>2</connections_with_failover_max_tries> <!-- 2 попытки на подключение -->
+      </default>
+    </profiles>
     {{- if or (ne (int .Values.shards) 1) (ne (int .Values.replicaCount) 1)}}
     <!-- Cluster configuration - Any update of the shards and replicas requires helm upgrade -->
     <remote_servers>
@@ -212,7 +474,7 @@ defaultConfigurationOverrides: |
       </raft_configuration>
     </keeper_server>
     {{- end }}
-    {{- if or .Values.keeper.enabled .Values.zookeeper.enabled .Values.externalZookeeper.servers }}
+    {{- if or .Values.keeper.enabled .Values.zookeeper.enabled .Values.externalZookeeper.servers .Values.externalKeeper.enabled }}
     <!-- Zookeeper configuration -->
     <zookeeper>
       {{- if or .Values.keeper.enabled }}
@@ -230,6 +492,15 @@ defaultConfigurationOverrides: |
       <node>
         <host from_env="{{ printf "KEEPER_NODE_%d" $node }}"></host>
         <port>{{ $.Values.zookeeper.service.ports.client }}</port>
+      </node>
+      {{- end }}
+      {{- else if .Values.externalKeeper.enabled }}
+      {{/* externalKeeper configuration using the helm chart */}}
+      {{- $nodes := .Values.externalKeeper.replicaCount | int }}
+      {{- range $node, $e := until $nodes }}
+      <node>
+        <host from_env="{{ printf "KEEPER_NODE_%d" $node }}"></host>
+        <port>{{ $.Values.externalKeeper.service.ports.client }}</port>
       </node>
       {{- end }}
       {{- else if .Values.externalZookeeper.servers }}
@@ -287,4 +558,4 @@ defaultConfigurationOverrides: |
     </prometheus>
     {{- end }}
   </clickhouse>
-# EhLoSlrmb3
+# # EhLoSlrmb3

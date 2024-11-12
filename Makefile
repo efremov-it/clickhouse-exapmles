@@ -8,7 +8,7 @@ GRAFANA := grafana/docker-compose.yml
 SQL_SETUP=commands/setup.sql
 SQL_INSERT=commands/insert.sql
 
-K_PASSWD := $(shell kubectl get secret --namespace lm-stage my-release-clickhouse -o jsonpath="{.data.admin-password}" | base64 -d)
+K_PASSWD := $(shell kubectl get secret ch-cluster-clickhouse -o jsonpath="{.data.admin-password}" | base64 -d)
 
 PWD := $(shell pwd)
 VM := ${PWD}/volumes
@@ -85,17 +85,17 @@ trun:
 .PHONY: k-up k-setup k-insert
 
 k-up:
-	helm install ch-cluster bitnami/clickhouse --version 6.3.0 --values k8s/test.yaml
+	helm upgrade -i ch-cluster k8s/clickhouse --version 6.3.0 --values k8s/test.yaml
 
 k-setup:
 	@echo "Running SQL file: $(SQL_SETUP)..."
 	@echo ${K_PASSWD}
-	cat $(SQL_SETUP) | kubectl exec -i my-release-clickhouse-shard0-0 -- clickhouse-client --password ${K_PASSWD} --multiquery
+	cat $(SQL_SETUP) | kubectl exec -i ch-cluster-clickhouse-shard0-0 -- clickhouse-client --password ${K_PASSWD} --multiquery
 
 k-insert:
 	@echo "Running SQL file: $(SQL_INSERT)..."
 	@echo ${K_PASSWD}
-	@cat $(SQL_INSERT) | kubectl exec -i my-release-clickhouse-shard0-0 -- clickhouse-client --password ${K_PASSWD} --multiquery
+	@cat $(SQL_INSERT) | kubectl exec -i ch-cluster-clickhouse-shard0-0 -- clickhouse-client --password ${K_PASSWD} --multiquery
 
 k-cli:
-	@kubectl exec -it my-release-clickhouse-shard0-0 -- clickhouse-client --password ${K_PASSWD}
+	@kubectl exec -it ch-cluster-clickhouse-shard0-0 -- clickhouse-client --password ${K_PASSWD}

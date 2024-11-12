@@ -20,6 +20,11 @@ dependencies:
   tags:
   - bitnami-common
   version: 2.x.x
+- condition: externalKeeper.enabled
+  name: clickhouse
+  repository: oci://harbor.rvision.pro/charts
+  version: 2.x.x
+  alias: externalKeeper
 description: ClickHouse is an open-source column-oriented OLAP database management
   system. Use it to boost your database performance while providing linear scalability
   and hardware efficiency.

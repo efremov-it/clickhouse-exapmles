@@ -8,7 +8,7 @@
             <insert_distributed_sync>0</insert_distributed_sync> <!-- Асинхронная вставка без ожидания -->
             <!-- <insert_quorum>1</insert_quorum> записанные данные гарантированно сохраняются как минимум на одной реплике каждого шарда -->
             <!-- <insert_quorum_timeout>60</insert_quorum_timeout> -->
-            <prefer_localhost_replica>true</prefer_localhost_replica> <!-- использует локальную реплику (на которую был отправлен запрос), если она доступна (толтько чтение) -->
+            <prefer_localhost_replica>true</prefer_localhost_replica> <!-- использует локальную реплику (на которую был отправлен запрос), если она доступна (только чтение) -->
             <connect_timeout_with_failover_ms>750</connect_timeout_with_failover_ms> <!-- 0.75 сек на переключение -->
             <connections_with_failover_max_tries>2</connections_with_failover_max_tries> <!-- 2 попытки на подключение -->
             <max_memory_usage>10000000000</max_memory_usage>

@@ -1,8 +1,3 @@
-{{- /*
-Copyright Broadcom, Inc. All Rights Reserved.
-SPDX-License-Identifier: APACHE-2.0
-*/}}
-
 {{- $shards := .Values.shards | int }}
 {{- range $i, $e := until $shards }}
 apiVersion: {{ include "common.capabilities.statefulset.apiVersion" $ }}
@@ -10,18 +5,19 @@ kind: StatefulSet
 metadata:
   name: {{ printf "%s-shard%d" (include "common.names.fullname" $ ) $i }}
   namespace: {{ include "common.names.namespace" $ | quote }}
-  labels: {{- include "common.labels.standard" ( dict "customLabels" $.Values.commonLabels "context" $ ) | nindent 4 }}
+  labels: {{- include "common.labels.standard" $ | nindent 4 }}
     app.kubernetes.io/component: clickhouse
-    shard: {{ $i | quote }}
+    {{- if $.Values.commonLabels }}
+    {{- include "common.tplvalues.render" ( dict "value" $.Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- end }}
   {{- if $.Values.commonAnnotations }}
   annotations: {{- include "common.tplvalues.render" ( dict "value" $.Values.commonAnnotations "context" $ ) | nindent 4 }}
   {{- end }}
 spec:
   replicas: {{ $.Values.replicaCount }}
   podManagementPolicy: {{ $.Values.podManagementPolicy | quote }}
-  {{- $podLabels := include "common.tplvalues.merge" ( dict "values" ( list $.Values.podLabels $.Values.commonLabels ) "context" $ ) }}
   selector:
-    matchLabels: {{- include "common.labels.matchLabels" ( dict "customLabels" $podLabels "context" $ ) | nindent 6 }}
+    matchLabels: {{ include "common.labels.matchLabels" $ | nindent 6 }}
       app.kubernetes.io/component: clickhouse
   serviceName: {{ printf "%s-headless" (include "common.names.fullname" $) }}
   {{- if $.Values.updateStrategy }}
@@ -29,23 +25,23 @@ spec:
   {{- end }}
   template:
     metadata:
+      {{- if or $.Values.podAnnotations (and $.Values.metrics.enabled $.Values.metrics.podAnnotations) }}
       annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") $ | sha256sum }}
-        checksum/config-extra: {{ include (print $.Template.BasePath "/configmap-extra.yaml") $ | sha256sum }}
-        checksum/config-users-extra: {{ include (print $.Template.BasePath "/configmap-users-extra.yaml") $ | sha256sum }}
         {{- if $.Values.podAnnotations }}
         {{- include "common.tplvalues.render" (dict "value" $.Values.podAnnotations "context" $) | nindent 8 }}
         {{- end }}
         {{- if and $.Values.metrics.enabled $.Values.metrics.podAnnotations }}
         {{- include "common.tplvalues.render" (dict "value" $.Values.metrics.podAnnotations "context" $) | nindent 8 }}
         {{- end }}
-      labels: {{- include "common.labels.standard" ( dict "customLabels" $podLabels "context" $ ) | nindent 8 }}
+      {{- end }}
+      labels: {{- include "common.labels.standard" $ | nindent 8 }}
         app.kubernetes.io/component: clickhouse
-        shard: {{ $i | quote }}
+        {{- if $.Values.podLabels }}
+        {{- include "common.tplvalues.render" (dict "value" $.Values.podLabels "context" $) | nindent 8 }}
+        {{- end }}
     spec:
       serviceAccountName: {{ template "clickhouse.serviceAccountName" $ }}
       {{- include "clickhouse.imagePullSecrets" $ | nindent 6 }}
-      automountServiceAccountToken: {{ $.Values.automountServiceAccountToken }}
       {{- if $.Values.hostAliases }}
       hostAliases: {{- include "common.tplvalues.render" (dict "value" $.Values.hostAliases "context" $) | nindent 8 }}
       {{- end }}
@@ -53,20 +49,8 @@ spec:
       affinity: {{- include "common.tplvalues.render" ( dict "value" $.Values.affinity "context" $) | nindent 8 }}
       {{- else }}
       affinity:
-        podAffinity: {{- include "common.affinities.pods" (dict "type" $.Values.podAffinityPreset "component" "clickhouse" "customLabels" $podLabels "context" $) | nindent 10 }}
-        podAntiAffinity:
-          {{- if $.Values.podAntiAffinityShard }}
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchExpressions:
-                  - key: "shard"
-                    operator: In
-                    values:
-                      - "{{ $i }}"
-              topologyKey: "kubernetes.io/hostname"
-          {{- else }}
-          {{- include "common.affinities.pods" (dict "type" $.Values.podAntiAffinityPreset "component" "clickhouse" "customLabels" $podLabels "extraPodAffinityTerms" (ternary (list (dict "extraMatchLabels" (dict "shard" (printf "%d" $i)) "topologyKey" "kubernetes.io/hostname")) (list) $.Values.distributeReplicasByZone) "context" $) | nindent 10 }}
-          {{- end }}
+        podAffinity: {{- include "common.affinities.pods" (dict "type" $.Values.podAffinityPreset "component" "clickhouse" "context" $) | nindent 10 }}
+        podAntiAffinity: {{- include "common.affinities.pods" (dict "type" $.Values.podAntiAffinityPreset "component" "clickhouse" "context" $) | nindent 10 }}
         nodeAffinity: {{- include "common.affinities.nodes" (dict "type" $.Values.nodeAffinityPreset.type "key" $.Values.nodeAffinityPreset.key "values" $.Values.nodeAffinityPreset.values) | nindent 10 }}
       {{- end }}
       {{- if $.Values.nodeSelector }}
@@ -85,7 +69,7 @@ spec:
       topologySpreadConstraints: {{- include "common.tplvalues.render" (dict "value" $.Values.topologySpreadConstraints "context" $) | nindent 8 }}
       {{- end }}
       {{- if $.Values.podSecurityContext.enabled }}
-      securityContext: {{- include "common.compatibility.renderSecurityContext" (dict "secContext" $.Values.podSecurityContext "context" $) | nindent 8 }}
+      securityContext: {{- omit $.Values.podSecurityContext "enabled" | toYaml | nindent 8 }}
       {{- end }}
       {{- if $.Values.terminationGracePeriodSeconds }}
       terminationGracePeriodSeconds: {{ $.Values.terminationGracePeriodSeconds }}
@@ -97,12 +81,10 @@ spec:
           imagePullPolicy: {{ $.Values.volumePermissions.image.pullPolicy | quote }}
           {{- if $.Values.resources }}
           resources: {{- toYaml $.Values.resources | nindent 12 }}
-          {{- else if ne $.Values.resourcesPreset "none" }}
-          resources: {{- include "common.resources.preset" (dict "type" $.Values.resourcesPreset) | nindent 12 }}
           {{- end }}
-          {{- if $.Values.containerSecurityContext.enabled }}
           # We don't require a privileged container in this case
-          securityContext: {{- include "common.compatibility.renderSecurityContext" (dict "secContext" $.Values.containerSecurityContext "context" $) | nindent 12 }}
+          {{- if $.Values.containerSecurityContext.enabled }}
+          securityContext: {{- omit $.Values.containerSecurityContext "enabled" | toYaml | nindent 12 }}
           {{- end }}
           command:
             - /bin/sh
@@ -115,47 +97,40 @@ spec:
               mountPath: /tmp/certs
             - name: clickhouse-certificates
               mountPath: /opt/bitnami/clickhouse/certs
-            - name: empty-dir
-              mountPath: /tmp
-              subPath: tmp-dir
         {{- else if and $.Values.volumePermissions.enabled $.Values.persistence.enabled }}
         - name: volume-permissions
           image: {{ include "clickhouse.volumePermissions.image" $ }}
           imagePullPolicy: {{ $.Values.volumePermissions.image.pullPolicy | quote }}
-          command:
-            - /bin/sh
-            - -ec
-            - |
-              mkdir -p /bitnami/clickhouse/data
-              chmod 700 /bitnami/clickhouse/data
-              {{- if $.Values.keeper.enabled }}
-              mkdir -p /bitnami/clickhouse/keeper
-              chmod 700 /bitnami/clickhouse/keeper
-              {{- end }}
-              chown {{ $.Values.containerSecurityContext.runAsUser }}:{{ $.Values.podSecurityContext.fsGroup }} /bitnami/clickhouse
-              find /bitnami/clickhouse -mindepth 1 -maxdepth 1 -not -name ".snapshot" -not -name "lost+found" | \
-              xargs -r chown -R {{ $.Values.containerSecurityContext.runAsUser }}:{{ $.Values.podSecurityContext.fsGroup }}
-              {{- if $.Values.tls.enabled }}
-              cp /tmp/certs/* /opt/bitnami/clickhouse/certs/
-              {{- if eq ( toString ( $.Values.volumePermissions.containerSecurityContext.runAsUser )) "auto" }}
-              chown -R `id -u`:`id -G | cut -d " " -f2` /opt/bitnami/clickhouse/certs/
-              {{- else }}
-              chown -R {{ $.Values.containerSecurityContext.runAsUser }}:{{ $.Values.podSecurityContext.fsGroup }} /opt/bitnami/clickhouse/certs/
-              {{- end }}
-              chmod 600 {{ include "clickhouse.tlsCertKey" $ }}
-              {{- end }}
-          securityContext: {{- include "common.tplvalues.render" (dict "value" $.Values.volumePermissions.containerSecurityContext "context" $) | nindent 12 }}
+          command: |
+            mkdir -p /bitnami/clickhouse/data
+            chmod 700 /bitnami/clickhouse/data
+            {{- if $.Values.keeper.enabled }}
+            mkdir -p /bitnami/clickhouse/keeper
+            chmod 700 /bitnami/clickhouse/keeper
+            {{- end }}
+            chown {{ $.Values.containerSecurityContext.runAsUser }}:{{ $.Values.podSecurityContext.fsGroup }} /bitnami/clickhouse
+            find /bitnami/clickhouse -mindepth 1 -maxdepth 1 -not -name ".snapshot" -not -name "lost+found" | \
+            xargs -r chown -R {{ $.Values.containerSecurityContext.runAsUser }}:{{ $.Values.podSecurityContext.fsGroup }}
+            {{- if $.Values.tls.enabled }}
+            cp /tmp/certs/* /opt/bitnami/clickhouse/certs/
+            {{- if eq ( toString ( $.Values.volumePermissions.containerSecurityContext.runAsUser )) "auto" }}
+            chown -R `id -u`:`id -G | cut -d " " -f2` /opt/bitnami/clickhouse/certs/
+            {{- else }}
+            chown -R {{ $.Values.containerSecurityContext.runAsUser }}:{{ $.Values.podSecurityContext.fsGroup }} /opt/bitnami/clickhouse/certs/
+            {{- end }}
+            chmod 600 {{ include "clickhouse.tlsCertKey" $ }}
+            {{- end }}
+          {{- if $.Values.containerSecurityContext.enabled }}
+          securityContext: {{- omit $.Values.containerSecurityContext "enabled" | toYaml | nindent 12 }}
+          {{- end }}
           {{- if $.Values.volumePermissions.resources }}
           resources: {{- toYaml $.Values.volumePermissions.resources | nindent 12 }}
-          {{- else if ne $.Values.volumePermissions.resourcesPreset "none" }}
-          resources: {{- include "common.resources.preset" (dict "type" $.Values.volumePermissions.resourcesPreset) | nindent 12 }}
           {{- end }}
           volumeMounts:
             - name: data
               mountPath: /bitnami/clickhouse
-            - name: empty-dir
-              mountPath: /tmp
-              subPath: tmp-dir
+            - name: config
+              mountPath: /bitnami/clickhouse/conf/default
             {{- if $.Values.tls.enabled }}
             - name: raw-certificates
               mountPath: /tmp/certs
@@ -167,11 +142,11 @@ spec:
           {{- include "common.tplvalues.render" (dict "value" $.Values.initContainers "context" $) | nindent 8 }}
         {{- end }}
       containers:
-        - name: clickhouse
+        - name: {{ $.Values.service.containerName | quote }}
           image: {{ template "clickhouse.image" $ }}
           imagePullPolicy: {{ $.Values.image.pullPolicy }}
           {{- if $.Values.containerSecurityContext.enabled }}
-          securityContext: {{- include "common.compatibility.renderSecurityContext" (dict "secContext" $.Values.containerSecurityContext "context" $) | nindent 12 }}
+          securityContext: {{- omit $.Values.containerSecurityContext "enabled" | toYaml | nindent 12 }}
           {{- end }}
           {{- if $.Values.diagnosticMode.enabled }}
           command: {{- include "common.tplvalues.render" (dict "value" $.Values.diagnosticMode.command "context" $) | nindent 12 }}
@@ -190,6 +165,8 @@ spec:
               value: {{ $.Values.containerPorts.http | quote }}
             - name: CLICKHOUSE_TCP_PORT
               value: {{ $.Values.containerPorts.tcp | quote }}
+            - name: CLICKHOUSE_GRPC_PORT
+              value: {{ $.Values.containerPorts.grpc | quote }}
             - name: CLICKHOUSE_MYSQL_PORT
               value: {{ $.Values.containerPorts.mysql | quote }}
             - name: CLICKHOUSE_POSTGRESQL_PORT
@@ -241,16 +218,13 @@ spec:
             {{- include "common.tplvalues.render" (dict "value" $.Values.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
             {{- if $.Values.keeper.enabled }}
-            {{- $replicas := $.Values.replicaCount | int }}
-            {{- range $j, $r := until $replicas }}
-            - name: {{ printf "KEEPER_NODE_%d" $j }}
-              value: {{ printf "%s-shard%d-%d.%s.%s.svc.%s" (include "common.names.fullname" $ ) $i $j (include "clickhouse.headlessServiceName" $) (include "common.names.namespace" $) $.Values.clusterDomain }}
+            {{- $replicas := $.Values.replicaCount }}
+            {{- range $j, $r := until ($replicas | int) }}
+            {{- range $s := until ($shards | int) }}
+            {{- $serverID := add (mul $shards $j) $s }}
+            - name: {{ printf "KEEPER_NODE_%d" $serverID }}
+              value: {{ printf "%s-shard%d-%d.%s.%s.svc.%s" (include "common.names.fullname" $ ) $s $j (include "clickhouse.headlessServiceName" $) (include "common.names.namespace" $) $.Values.clusterDomain }}
             {{- end }}
-            {{- else if $.Values.externalKeeper.enabled }}
-            {{- $replicas := $.Values.externalKeeper.replicaCount | int }}
-            {{- range $j, $r := until $replicas }}
-            - name: {{ printf "KEEPER_NODE_%d" $j }}
-              value: {{ printf "%s-shard0-%d.%s.%s.svc.%s" (include "clickhouse.externalKeeper.fullname" $ ) $j (include "clickhouse.externalKeeper.headlessServiceName" $) (include "common.names.namespace" $) $.Values.clusterDomain }}
             {{- end }}
             {{- else if $.Values.zookeeper.enabled }}
             {{- $replicas := $.Values.zookeeper.replicaCount | int }}
@@ -270,14 +244,14 @@ spec:
             {{- end }}
           {{- if $.Values.resources }}
           resources: {{- toYaml $.Values.resources | nindent 12 }}
-          {{- else if ne $.Values.resourcesPreset "none" }}
-          resources: {{- include "common.resources.preset" (dict "type" $.Values.resourcesPreset) | nindent 12 }}
           {{- end }}
           ports:
             - name: http
               containerPort: {{ $.Values.containerPorts.http }}
             - name: tcp
               containerPort: {{ $.Values.containerPorts.tcp }}
+            - name: grpc
+              containerPort: {{ $.Values.containerPorts.grpc }}
             {{- if $.Values.tls.enabled }}
             - name: https
               containerPort: {{ $.Values.containerPorts.https }}
@@ -309,7 +283,8 @@ spec:
           livenessProbe: {{- include "common.tplvalues.render" (dict "value" $.Values.customLivenessProbe "context" $) | nindent 12 }}
           {{- else if $.Values.livenessProbe.enabled }}
           livenessProbe: {{- include "common.tplvalues.render" (dict "value" (omit $.Values.livenessProbe "enabled") "context" $) | nindent 12 }}
-            tcpSocket:
+            httpGet:
+              path: /ping
               port: http
           {{- end }}
           {{- if $.Values.customReadinessProbe }}
@@ -333,40 +308,21 @@ spec:
           lifecycle: {{- include "common.tplvalues.render" (dict "value" $.Values.lifecycleHooks "context" $) | nindent 12 }}
           {{- end }}
           volumeMounts:
-            - name: empty-dir
-              mountPath: /opt/bitnami/clickhouse/etc
-              subPath: app-conf-dir
-            - name: empty-dir
-              mountPath: /opt/bitnami/clickhouse/logs
-              subPath: app-logs-dir
-            - name: empty-dir
-              mountPath: /opt/bitnami/clickhouse/tmp
-              subPath: app-tmp-dir
-            - name: empty-dir
-              mountPath: /tmp
-              subPath: tmp-dir
             - name: scripts
               mountPath: /scripts/setup.sh
               subPath: setup.sh
             - name: data
               mountPath: /bitnami/clickhouse
-            - name: config
-              mountPath: /bitnami/clickhouse/etc/conf.d/default
+              # mount config to init container, not the main one
+#            - name: config
+#              mountPath: /bitnami/clickhouse/etc/conf.d/default
           {{- if or $.Values.extraOverridesConfigmap $.Values.extraOverrides }}
             - name: extra-config
               mountPath: /bitnami/clickhouse/etc/conf.d/extra-configmap
           {{- end }}
-          {{- if or $.Values.usersExtraOverridesConfigmap $.Values.usersExtraOverrides }}
-            - name: users-extra-config
-              mountPath: /bitnami/clickhouse/etc/users.d/users-extra-configmap
-          {{- end }}
           {{- if $.Values.extraOverridesSecret }}
             - name: extra-secret
               mountPath: /bitnami/clickhouse/etc/conf.d/extra-secret
-          {{- end }}
-          {{- if $.Values.usersExtraOverridesSecret }}
-            - name: users-extra-secret
-              mountPath: /bitnami/clickhouse/etc/users.d/users-extra-secret
           {{- end }}
           {{- if $.Values.tls.enabled }}
             - name: clickhouse-certificates
@@ -391,8 +347,6 @@ spec:
           configMap:
             name: {{ printf "%s-scripts" (include "common.names.fullname" $) }}
             defaultMode: 0755
-        - name: empty-dir
-          emptyDir: {}
         - name: config
           configMap:
             name: {{ template "clickhouse.configmapName" $ }}
@@ -411,28 +365,14 @@ spec:
           configMap:
             name: {{ template "clickhouse.extraConfigmapName" $ }}
         {{- end }}
-        {{- if or $.Values.usersExtraOverridesConfigmap $.Values.usersExtraOverrides }}
-        - name: users-extra-config
-          configMap:
-            name: {{ template "clickhouse.usersExtraConfigmapName" $ }}
-        {{- end }}
         {{- if $.Values.extraOverridesSecret }}
         - name: extra-secret
           secret:
             secretName: {{ $.Values.extraOverridesSecret }}
         {{- end }}
-        {{- if $.Values.usersExtraOverridesSecret }}
-        - name: users-extra-secret
-          secret:
-            secretName: {{ $.Values.usersExtraOverridesSecret }}
-        {{- end }}
         {{- if not $.Values.persistence.enabled }}
         - name: data
           emptyDir: {}
-        {{- else if $.Values.persistence.existingClaim }}
-        - name: data
-          persistentVolumeClaim:
-            claimName: {{ tpl $.Values.persistence.existingClaim $ }}
         {{- end }}
         {{- if  $.Values.tls.enabled }}
         - name: raw-certificates
@@ -444,20 +384,20 @@ spec:
         {{- if $.Values.extraVolumes }}
         {{- include "common.tplvalues.render" (dict "value" $.Values.extraVolumes "context" $) | nindent 8 }}
         {{- end }}
-  {{- if or $.Values.extraVolumeClaimTemplates (and $.Values.persistence.enabled (not $.Values.persistence.existingClaim)) }}
+  {{- if $.Values.persistence.enabled }}
   volumeClaimTemplates:
-    {{- if and $.Values.persistence.enabled (not $.Values.persistence.existingClaim) }}    
-    - apiVersion: v1
-      kind: PersistentVolumeClaim
-      metadata:
+    - metadata:
         name: data
-        {{- if or $.Values.persistence.annotations $.Values.commonAnnotations }}
-        {{- $claimAnnotations := include "common.tplvalues.merge" ( dict "values" ( list $.Values.persistence.annotations $.Values.commonLabels ) "context" $ ) }}
-        annotations: {{- include "common.tplvalues.render" ( dict "value" $claimAnnotations "context" $ ) | nindent 10 }}
+        annotations:
+          {{- if $.Values.persistence.annotations }}
+          {{- include "common.tplvalues.render" (dict "value" $.Values.persistence.annotations "context" $) | nindent 10 }}
+          {{- end }}
+          {{- if $.Values.commonAnnotations }}
+          {{- include "common.tplvalues.render" (dict "value" $.Values.commonAnnotations "context" $) | nindent 10 }}
+          {{- end }}
+        {{- if $.Values.commonLabels }}
+        labels: {{- include "common.tplvalues.render" (dict "value" $.Values.commonLabels "context" $) | nindent 10 }}
         {{- end }}
-        {{- $claimLabels := include "common.tplvalues.merge" ( dict "values" ( list $.Values.persistence.labels $.Values.commonLabels ) "context" $ ) }}
-        labels: {{- include "common.labels.matchLabels" ( dict "customLabels" $claimLabels "context" $ ) | nindent 10 }}
-          app.kubernetes.io/component: clickhouse
       spec:
         accessModes:
         {{- range $.Values.persistence.accessModes }}
@@ -473,10 +413,6 @@ spec:
         dataSource: {{- include "common.tplvalues.render" (dict "value" $.Values.persistence.dataSource "context" $) | nindent 10 }}
         {{- end }}
         {{- include "common.storage.class" (dict "persistence" $.Values.persistence "global" $.Values.global) | nindent 8 }}
-    {{- end }}
-    {{- if $.Values.extraVolumeClaimTemplates }}
-    {{- include "common.tplvalues.render" ( dict "value" $.Values.extraVolumeClaimTemplates "context" $) | nindent 4 }}
-    {{- end }}
   {{- end }}
 ---
 {{- end }}
